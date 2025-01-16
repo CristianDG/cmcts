@@ -8,7 +8,7 @@
 typedef struct {
   char board[9];
   char player;
-  bool game_over;
+  bool game_over; // TODO: remover
 } Game_State;
 
 typedef struct {
@@ -421,6 +421,7 @@ typedef Q_Table_State Q_Table[9][9 * 9 * 9];
 void treinar(
   Q_Table *q_table,
   Game_State *state,
+  char player,
   f32 learning_rate,
   f32 discount_factor,
   f32 exploration_prob,
@@ -437,6 +438,8 @@ void treinar(
       f32 reward;
       if (winner) {
         reward = termination_value(winner);
+        // TODO: break?
+        break;
       } else {
         // TODO: remover alguma coisa de reward
       }
@@ -446,7 +449,11 @@ void treinar(
 
 void print_table(Q_Table *q_table);
 
-Action q_learning(Q_Table *q_table);
+Action q_learning(
+  Q_Table *q_table,
+  Game_State *state,
+  char player
+);
 
 // }}}
 
