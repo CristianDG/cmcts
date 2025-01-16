@@ -35,6 +35,7 @@ typedef u32 b32;
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h> // for memset
 
 typedef struct {
   u8 *data;
@@ -75,6 +76,7 @@ void *arena_alloc(Arena *arena, uintptr size) {
     return 0;
   }
   void *ptr = &arena->data[arena->cursor];
+  memset(ptr, 0, size);
   arena->cursor += size;
   return ptr;
 }
@@ -121,7 +123,7 @@ void *_dynamic_array_push(void *arr, Arena *a){
 #define dynamic_array_push(dyn, item, arena) do { \
   *((typeof(dyn))_dynamic_array_push(dyn, arena)) = item; }while(false)
 
-void dynamic_array_reset(void *arr){
+void dynamic_array_clear(void *arr){
   Dynamic_Array_Header *header = arr - sizeof(Dynamic_Array_Header);
   header->len = 0;
 }

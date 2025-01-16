@@ -269,9 +269,10 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
 
       if (score > best_score) {
         best_score = score;
-        dynamic_array_reset(best_children);
+        dynamic_array_clear(best_children);
+        dynamic_array_push(best_children, child, tmp.arena);
       } else if (score == best_score) {
-        dynamic_array_push(best_children, node, tmp.arena);
+        dynamic_array_push(best_children, child, tmp.arena);
       }
     }
     // TODO: random selection
@@ -441,8 +442,8 @@ int main() {
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      // action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
-      action = receive_input(&game_state);
+      action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
+      // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
     winner = terminated(&game_state);
