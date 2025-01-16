@@ -406,6 +406,50 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
 
 // }}}
 
+// Q-Learning {{{
+
+/*
+ action_bits      | state bits
+ player x? | spot | x table   | o table   | empty table
+ 0         | 0000 | 000000000 | 000000000 | 000000000
+ * */
+typedef u32 Q_Table_State;
+
+// TODO: ver se está correto
+typedef Q_Table_State Q_Table[9][9 * 9 * 9];
+
+void treinar(
+  Q_Table *q_table,
+  Game_State *state,
+  f32 learning_rate,
+  f32 discount_factor,
+  f32 exploration_prob,
+  f32 epochs
+) {
+  for (i32 epoch = 0; epoch < epochs; epoch++){
+    Game_State scratch_state = *state;
+    for (;;) {
+      Action_List action_list = possible_actions(&scratch_state);
+      Action action = get_random_action(&action_list);
+      simulate(&scratch_state, action);
+      char winner = terminated(&scratch_state);
+
+      f32 reward;
+      if (winner) {
+        reward = termination_value(winner);
+      } else {
+        // TODO: remover alguma coisa de reward
+      }
+    }
+  }
+}
+
+void print_table(Q_Table *q_table);
+
+Action q_learning(Q_Table *q_table);
+
+// }}}
+
 // human input {{{
 Action receive_input(Game_State *s) {
   printf("%c, provide a number between 1 and 9: ", s->player);
@@ -437,12 +481,12 @@ int main() {
     render(&game_state);
     Action action = {};
     if (game_state.player == 'O') {
-      action = minimax(&game_state);
-      // action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
-      // action = receive_input(&game_state);
-    } else {
       // action = minimax(&game_state);
       action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
+      // action = receive_input(&game_state);
+    } else {
+      action = minimax(&game_state);
+      // action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
