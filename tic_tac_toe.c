@@ -105,6 +105,8 @@ void simulate(Game_State *s, Action a) {
 
 }
 
+// static int debug_iterations = 0;
+
 // static int iterations;
 void render(Game_State *s) {
   // printf("------\n");
@@ -116,8 +118,8 @@ void render(Game_State *s) {
     }
     printf("\n");
   }
-  // printf("iterations: %d\n", iterations);
-  // iterations = 0;
+  // printf("iterations: %d\n", debug_iterations);
+  // debug_iterations = 0;
 }
 
 // MINIMAX {{{
@@ -136,14 +138,26 @@ typedef struct {
 Minimax_Action maximax(Game_State s, Action a, int8_t alpha, int8_t beta);
 Minimax_Action minimin(Game_State s, Action a, int8_t alpha, int8_t beta);
 
+Action minimax(Game_State *s) {
+  Minimax_Action res = {};
+  if (s->player == MAXIMISING_PLAYER) {
+    res = maximax(*s, (Action){}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
+  } else {
+    res = minimin(*s, (Action){}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
+  }
+  return res.action;
+}
+
+
 int8_t termination_value(char winner) {
   if (winner == MAXIMISING_PLAYER) return 1;
   if (winner == MINIMISING_PLAYER) return -1;
   return 0;
 }
 
+
 Minimax_Action maximax(Game_State s, Action a, int8_t alpha, int8_t beta){
-  // iterations++;
+  // debug_iterations++;
   if (a.player) {
     simulate(&s, a);
     char termination = terminated(&s);
@@ -166,18 +180,22 @@ Minimax_Action maximax(Game_State s, Action a, int8_t alpha, int8_t beta){
     Action action = action_list.actions[i];
     Minimax_Action temp = minimin(s, action, alpha, beta);
     if (temp.value > res.value) {
-      res = temp;
+      res = (Minimax_Action){
+        .action = action,
+        .value = temp.value,
+      };
       alpha = MAX(alpha, res.value);
     }
-    // if (res.value >= beta) {
-    //   return res;
-    // }
+    if (res.value >= beta) {
+      return res;
+    }
   }
 
   return res;
 }
 
 Minimax_Action minimin(Game_State s, Action a, int8_t alpha, int8_t beta){
+  // debug_iterations++;
   if (a.player) {
     simulate(&s, a);
     char termination = terminated(&s);
@@ -200,25 +218,18 @@ Minimax_Action minimin(Game_State s, Action a, int8_t alpha, int8_t beta){
     Action action = action_list.actions[i];
     Minimax_Action temp = maximax(s, action, alpha, beta);
     if (temp.value < res.value) {
-      res = temp;
+      res = (Minimax_Action){
+        .action = action,
+        .value = temp.value,
+      };
       beta = MIN(beta, res.value);
     }
-    // if (res.value <= alpha) {
-    //   return res;
-    // }
+    if (res.value <= alpha) {
+      return res;
+    }
   }
 
   return res;
-}
-
-Action minimax(Game_State *s) {
-  Minimax_Action res = {};
-  if (s->player == MAXIMISING_PLAYER) {
-    res = maximax(*s, (Action){}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
-  } else {
-    res = minimin(*s, (Action){}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
-  }
-  return res.action;
 }
 
 // }}}
@@ -438,7 +449,11 @@ int main() {
     if (winner) game_state.game_over = true;
   }
   render(&game_state);
-  printf("winner is %c!\n", winner);
+  if (winner == '-') {
+    printf("its a tie!\n");
+  } else {
+    printf("winner is %c!\n", winner);
+  }
 
   return 0;
 }

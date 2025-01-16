@@ -115,7 +115,7 @@ void *_dynamic_array_push(void *arr, Arena *a){
   if (header->len >= header->cap) {
     dynamic_array_grow(arr, a);
   }
-  return &arr[header->len++ * header->item_size];
+  return &((u8*)arr)[header->len++ * header->item_size];
 }
 
 #define dynamic_array_push(dyn, item, arena) do { \
