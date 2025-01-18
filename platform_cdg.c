@@ -107,28 +107,23 @@ typedef struct {
   u32 item_size;
 } Dynamic_Array_Header;
 
+// TODO: assert header exists
+Dynamic_Array_Header *dynamic_array_header(void *arr) {
+  return arr - sizeof(Dynamic_Array_Header);
+}
+
 void dynamic_array_grow(void *arr, Arena *a){
-  Dynamic_Array_Header *header = arr - sizeof(Dynamic_Array_Header);
+  Dynamic_Array_Header *header = dynamic_array_header(arr);
   assert(false && "wip");
 }
 
-void *_dynamic_array_push(void *arr, Arena *a){
-  Dynamic_Array_Header *header = arr - sizeof(Dynamic_Array_Header);
-  if (header->len >= header->cap) {
-    dynamic_array_grow(arr, a);
-  }
-  return &((u8*)arr)[header->len++ * header->item_size];
-}
-
-#define dynamic_array_push(dyn, item, arena) do { \
-  *((typeof(dyn))_dynamic_array_push(dyn, arena)) = item; }while(false)
 
 void dynamic_array_clear(void *arr){
-  Dynamic_Array_Header *header = arr - sizeof(Dynamic_Array_Header);
+  Dynamic_Array_Header *header = dynamic_array_header(arr);
   header->len = 0;
 }
 
-void *dynamic_array_make(Arena *a, u32 item_size, u32 initial_capacity){
+void _dynamic_array_make(Arena *a, void **arr, u32 initial_capacity, u32 item_size){
   Dynamic_Array_Header *header = arena_alloc(a, sizeof(Dynamic_Array_Header) + (item_size * initial_capacity));
 
   *header = (Dynamic_Array_Header) {
@@ -137,13 +132,29 @@ void *dynamic_array_make(Arena *a, u32 item_size, u32 initial_capacity){
     .len = 0,
   };
 
-  return header + 1;
+  *arr = header + 1;
 }
 
+#define dynamic_array_make(arena, dyn, cap) _dynamic_array_make(arena, (void **)dyn, cap, sizeof(*dyn))
+
 u32 dynamic_array_len(void *arr) {
-  Dynamic_Array_Header *header = arr - sizeof(Dynamic_Array_Header);
+  Dynamic_Array_Header *header = dynamic_array_header(arr);
   return header->len;
 }
+
+void *_dynamic_array_push(void **arr, Arena *a, u32 item_size){
+  if (arr == 0) {
+    _dynamic_array_make(a, arr, item_size, 8);
+  }
+  Dynamic_Array_Header *header = (*arr) - sizeof(Dynamic_Array_Header);
+  if (header->len >= header->cap) {
+    dynamic_array_grow(*arr, a);
+  }
+  return &((u8*)*arr)[header->len++ * header->item_size];
+}
+
+#define dynamic_array_push(dyn, item, arena) do { \
+  *((typeof(*dyn))_dynamic_array_push((void **)dyn, arena, sizeof(**dyn))) = item; }while(false)
 
 #endif
 // }}}

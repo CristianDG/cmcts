@@ -108,7 +108,7 @@ void simulate(Game_State *s, Action a) {
 // static int debug_iterations = 0;
 
 // static int iterations;
-void render(Game_State *s) {
+void render_ascii(Game_State *s) {
   // printf("------\n");
   system("clear");
   for (int i = 0; i < 3; ++i) {
@@ -256,7 +256,8 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
   MCTS_Node *best_child = 0;
   Temorary_Arena_Memory tmp = temp_arena_memory_begin(node->backing_arena);
   {
-    MCTS_Node **best_children = dynamic_array_make(tmp.arena, sizeof(*best_children), 32); // NOLINT
+    MCTS_Node **best_children;
+    dynamic_array_make(tmp.arena, &best_children, 32); // NOLINT
     for (MCTS_Node *child = node->first_child; child; child = child->sibling) {
       f32 score = 0;
       if (child->visits == 0) {
@@ -270,9 +271,9 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
       if (score > best_score) {
         best_score = score;
         dynamic_array_clear(best_children);
-        dynamic_array_push(best_children, child, tmp.arena);
+        dynamic_array_push(&best_children, child, tmp.arena);
       } else if (score == best_score) {
-        dynamic_array_push(best_children, child, tmp.arena);
+        dynamic_array_push(&best_children, child, tmp.arena);
       }
     }
     // TODO: random selection
@@ -349,9 +350,10 @@ MCTS_Node *get_random_node(MCTS_Node *first_child) {
   // NOTE: tentando uma estratégia de arena diferente
   Arena scratch = *first_child->backing_arena;
 
-  MCTS_Node **children = dynamic_array_make(&scratch, sizeof(*children), 32); // NOLINT
+  MCTS_Node **children;
+  dynamic_array_make(&scratch, &children, 32); // NOLINT
   for (MCTS_Node *node = first_child; node; node = node->sibling) {
-    dynamic_array_push(children, node, &scratch);
+    dynamic_array_push(&children, node, &scratch);
   }
 
   i32 idx = rand() % dynamic_array_len(children);
@@ -474,7 +476,7 @@ Action receive_input(Game_State *s) {
 }
 // }}}
 
-int main() {
+int tic_tac_toe_main() {
   srand(time(0));
 
   Game_State game_state = {
@@ -485,7 +487,7 @@ int main() {
 
   char winner;
   while (!game_state.game_over) {
-    render(&game_state);
+    render_ascii(&game_state);
     Action action = {};
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
@@ -500,7 +502,7 @@ int main() {
     winner = terminated(&game_state);
     if (winner) game_state.game_over = true;
   }
-  render(&game_state);
+  render_ascii(&game_state);
   if (winner == '-') {
     printf("its a tie!\n");
   } else {
