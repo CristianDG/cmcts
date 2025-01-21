@@ -154,19 +154,20 @@ u32 dynamic_array_len(void *arr) {
   return header->len;
 }
 
-void *_dynamic_array_push(void **arr, Arena *a, u32 item_size){
-  if (arr == 0) {
-    _dynamic_array_make(a, arr, item_size, 8);
+void _dynamic_array_push(void **arr, Arena *a, void* item, u32 item_size){
+  if (*arr == 0) {
+    _dynamic_array_make(a, arr, 32, item_size);
   }
-  Dynamic_Array_Header *header = (*arr) - sizeof(Dynamic_Array_Header);
+  Dynamic_Array_Header *header = dynamic_array_header(*arr);
   if (header->len >= header->cap) {
-    dynamic_array_grow(*arr, a);
+    dynamic_array_grow(arr, a);
   }
-  return &((u8*)*arr)[header->len++ * header->item_size];
+
+  void *addr = ((void*)*arr) + (header->len++ * header->item_size);
+  memcpy(addr, item, item_size);
 }
 
-#define dynamic_array_push(dyn, item, arena) do { \
-  *((typeof(*dyn))_dynamic_array_push((void **)dyn, arena, sizeof(**dyn))) = item; }while(false)
+#define dynamic_array_push(dyn, item, arena) _dynamic_array_push((void **)dyn, arena, &item, sizeof(**dyn)) /* NOLINT */
 
 #endif
 // }}}
