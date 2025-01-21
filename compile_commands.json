@@ -3,16 +3,17 @@
     "arguments": [
       "/usr/bin/clang",
       "-c",
+      "--std=c11",
       "-I",
       "raylib/include",
       "-g",
       "-o",
-      "mcts",
+      "mcts.bin",
       "platform_raylib.c"
     ],
     "directory": "/home/cristiandg/Desktop/ufs/ia/mcts",
     "file": "/home/cristiandg/Desktop/ufs/ia/mcts/platform_raylib.c",
-    "output": "/home/cristiandg/Desktop/ufs/ia/mcts/mcts"
+    "output": "/home/cristiandg/Desktop/ufs/ia/mcts/mcts.bin"
   },
   {
     "arguments": [
@@ -23,7 +24,7 @@
       "-emit-obj",
       "-mrelax-all",
       "-dumpdir",
-      "mcts-",
+      "mcts.bin-",
       "-disable-free",
       "-clear-ast-before-backend",
       "-disable-llvm-verifier",
@@ -63,6 +64,7 @@
       "/include",
       "-internal-externc-isystem",
       "/usr/include",
+      "--std=c11",
       "-ferror-limit",
       "19",
       "-stack-protector",
@@ -75,11 +77,11 @@
       "-x",
       "c",
       "-o",
-      "/tmp/platform_raylib-5f697e.o",
+      "/tmp/platform_raylib-e1d8c4.o",
       "platform_raylib.c"
     ],
     "directory": "/home/cristiandg/Desktop/ufs/ia/mcts",
     "file": "/home/cristiandg/Desktop/ufs/ia/mcts/platform_raylib.c",
-    "output": "/tmp/platform_raylib-5f697e.o"
+    "output": "/tmp/platform_raylib-e1d8c4.o"
   }
 ]

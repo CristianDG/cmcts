@@ -1,2 +1,5 @@
 *.bin
 .cache/
+.idea/
+.project
+.gdb_history

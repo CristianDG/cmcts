@@ -105,11 +105,17 @@ typedef struct {
   u32 len;
   u32 cap;
   u32 item_size;
+  u8  magic[4];
 } Dynamic_Array_Header;
 
 // TODO: assert header exists
 Dynamic_Array_Header *dynamic_array_header(void *arr) {
-  return arr - sizeof(Dynamic_Array_Header);
+  Dynamic_Array_Header *res = arr - sizeof(Dynamic_Array_Header);
+  assert(res->magic[0] == 'D');
+  assert(res->magic[1] == 'Y');
+  assert(res->magic[2] == 'N');
+  assert(res->magic[3] == 0);
+  return res;
 }
 
 void dynamic_array_grow(void *arr, Arena *a){
@@ -130,6 +136,7 @@ void _dynamic_array_make(Arena *a, void **arr, u32 initial_capacity, u32 item_si
     .item_size = item_size,
     .cap = initial_capacity,
     .len = 0,
+    .magic = "DYN",
   };
 
   *arr = header + 1;
