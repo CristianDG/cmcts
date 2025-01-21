@@ -118,9 +118,14 @@ Dynamic_Array_Header *dynamic_array_header(void *arr) {
   return res;
 }
 
-void dynamic_array_grow(void *arr, Arena *a){
-  Dynamic_Array_Header *header = dynamic_array_header(arr);
-  assert(false && "wip");
+
+void dynamic_array_grow(void **arr, Arena *a){
+  Dynamic_Array_Header *header = dynamic_array_header(*arr);
+  assert(header->len >= header->cap);
+  void *new_place = arena_alloc(a, sizeof(Dynamic_Array_Header) + (header->item_size * header->cap * 2));
+  header->cap *= 2;
+  memcpy(new_place, header, sizeof(Dynamic_Array_Header) + (header->item_size * header->cap));
+  *arr = new_place + sizeof(Dynamic_Array_Header);
 }
 
 
