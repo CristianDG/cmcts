@@ -242,6 +242,7 @@ typedef struct mcts_node {
   // TODO: mudar para dynamic_array
   struct mcts_node *first_child;
   struct mcts_node *sibling;
+  struct mcts_node **dyn_children;
   // TODO: mudar para `Action` ...?
   Game_State state;
   Action action_taken;
@@ -258,7 +259,8 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
   {
     MCTS_Node **best_children;
     dynamic_array_make(tmp.arena, &best_children, 32); // NOLINT
-    for (MCTS_Node *child = node->first_child; child; child = child->sibling) {
+    for (i32 i = 0; i < dynamic_array_len(node->dyn_children); i++) {
+      MCTS_Node *child = node->dyn_children[i];
       f32 score = 0;
       if (child->visits == 0) {
         score = INFINITY;
@@ -296,6 +298,7 @@ void expand(MCTS_Node *node){
     simulate(&state_copy, action);
 
     MCTS_Node *new_node = arena_alloc(node->backing_arena, sizeof(MCTS_Node));
+
     *new_node = (MCTS_Node){
       .backing_arena = node->backing_arena,
       .action_taken = action,
@@ -305,6 +308,9 @@ void expand(MCTS_Node *node){
       // add to linked list
       .sibling = prev_sibling,
     };
+
+    dynamic_array_push(&node->dyn_children, new_node, node->backing_arena);
+
     if (!node->first_child) {
       node->first_child = new_node;
     }
@@ -346,25 +352,19 @@ i32 random_simulate(Game_State *s) {
   return res;
 }
 
-MCTS_Node *get_random_node(MCTS_Node *first_child) {
-  // NOTE: tentando uma estratégia de arena diferente
-  Arena scratch = *first_child->backing_arena;
-
-  MCTS_Node **children;
-  dynamic_array_make(&scratch, &children, 32); // NOLINT
-  for (MCTS_Node *node = first_child; node; node = node->sibling) {
-    dynamic_array_push(&children, node, &scratch);
-  }
-
-  i32 idx = rand() % dynamic_array_len(children);
-  return children[idx];
+MCTS_Node *get_random_node(MCTS_Node *node) {
+  i32 idx = rand() % dynamic_array_len(node->dyn_children);
+  MCTS_Node *res = node->dyn_children[idx];
+  assert(res != 0);
+  return res;
 }
 
-MCTS_Node *get_best_child(MCTS_Node *first_child) {
-  MCTS_Node *best_node = first_child;
-  for (MCTS_Node *node = first_child; node; node = node->sibling) {
-    if (node->wins > best_node->wins) {
-      best_node = node;
+MCTS_Node *get_best_child(MCTS_Node *node) {
+  MCTS_Node *best_node = node->dyn_children[0];
+  for (i32 i = 0; i < dynamic_array_len(node->dyn_children); ++i) {
+    MCTS_Node *child = node->dyn_children[i];
+    if (child->wins > best_node->wins) {
+      best_node = child;
     }
   }
   return best_node;
@@ -392,7 +392,7 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
 
     // simulação
     if (node->first_child) {
-      node = get_random_node(node->first_child);
+      node = get_random_node(node);
     }
 
     // retropropagação
@@ -401,7 +401,7 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
 
   }
 
-  MCTS_Node *best_child = get_best_child(root->first_child);
+  MCTS_Node *best_child = get_best_child(root);
   return best_child->action_taken;
 }
 
@@ -491,11 +491,11 @@ int tic_tac_toe_main() {
     Action action = {};
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
+      action = monte_carlo_tree_search(&arena, &game_state, 10000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       action = minimax(&game_state);
-      // action = monte_carlo_tree_search(&arena, &game_state, 100, M_SQRT2);
+      // action = monte_carlo_tree_search(&arena, &game_state, 100, sqrt(2));
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
