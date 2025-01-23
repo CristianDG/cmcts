@@ -378,11 +378,10 @@ MCTS_Node *get_best_child(MCTS_Node *node) {
   return best_node;
 }
 
-Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 exploration_constant) {
+Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32 exploration_constant) {
   assert(iterations > 0);
   char player = s->player;
 
-  Arena scratch = *arena;
   MCTS_Node *root = arena_alloc(&scratch, sizeof(MCTS_Node));
   dynamic_array_make(&scratch, &root->dyn_children, 8);
   root->backing_arena = &scratch;
@@ -462,11 +461,11 @@ int main() {
     // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
+      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
+      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
