@@ -9,4 +9,4 @@ flags+=" -I raylib/include"
 flags+=" -l raylib"
 flags+=" -g"
 
-clang -o mcts.bin tic_tac_toe.c $flags
+clang -o mcts.bin platform_raylib.c $flags

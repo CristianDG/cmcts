@@ -70,16 +70,30 @@ void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem){
 }
 
 // TODO: add alignment
-void *arena_alloc(Arena *arena, uintptr size) {
-  if (arena->cursor + size > arena->size) {
-    fprintf(stderr, "Could not allocate %zu bytes\n", size);
-    return 0;
-  }
+void *dg_arena_alloc(Arena *arena, uintptr size) {
   void *ptr = &arena->data[arena->cursor];
   memset(ptr, 0, size);
   arena->cursor += size;
   return ptr;
 }
+
+// TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
+void *dg_debug_arena_alloc(Arena *arena, uintptr size, char *file, i32 line) {
+  // TODO: registrar onde foram todas as alocações
+  void *ptr = dg_arena_alloc(arena, size);
+  if (arena->cursor + size > arena->size) {
+    fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
+    return 0;
+  }
+  return ptr;
+}
+
+
+#if defined(DG_ARENA_DEBUG)
+#define arena_alloc(arena, size) dg_debug_arena_alloc(arena, size, __FILE__, __LINE__)
+#else
+#define arena_alloc(arena, size) dg_arena_alloc(arena, size)
+#endif //DG_ARENA_DEBUG
 
 // TODO:
 void arena_clear(Arena *arena) {
@@ -108,8 +122,10 @@ typedef struct {
   u8  magic[4];
 } Dynamic_Array_Header;
 
-// TODO: assert header exists
+// FIXME: stack smashing
 Dynamic_Array_Header *dynamic_array_header(void *arr) {
+  assert(arr != 0);
+
   Dynamic_Array_Header *res = arr - sizeof(Dynamic_Array_Header);
   assert(res->magic[0] == 'D');
   assert(res->magic[1] == 'Y');
@@ -122,9 +138,14 @@ Dynamic_Array_Header *dynamic_array_header(void *arr) {
 void dynamic_array_grow(void **arr, Arena *a){
   Dynamic_Array_Header *header = dynamic_array_header(*arr);
   assert(header->len >= header->cap);
-  void *new_place = arena_alloc(a, sizeof(Dynamic_Array_Header) + (header->item_size * header->cap * 2));
-  header->cap *= 2;
-  memcpy(new_place, header, sizeof(Dynamic_Array_Header) + (header->item_size * header->cap));
+
+  u32 next_cap = header->cap * 2;
+  u32 next_size = header->item_size * next_cap;
+
+  void *new_place = arena_alloc(a, sizeof(Dynamic_Array_Header) + next_size);
+  memcpy(new_place, header, sizeof(Dynamic_Array_Header) + next_size);
+  header->cap = next_cap;
+
   *arr = new_place + sizeof(Dynamic_Array_Header);
 }
 
@@ -133,6 +154,7 @@ void dynamic_array_clear(void *arr){
   Dynamic_Array_Header *header = dynamic_array_header(arr);
   header->len = 0;
 }
+
 
 void _dynamic_array_make(Arena *a, void **arr, u32 initial_capacity, u32 item_size){
   Dynamic_Array_Header *header = arena_alloc(a, sizeof(Dynamic_Array_Header) + (item_size * initial_capacity));
@@ -147,12 +169,17 @@ void _dynamic_array_make(Arena *a, void **arr, u32 initial_capacity, u32 item_si
   *arr = header + 1;
 }
 
-#define dynamic_array_make(arena, dyn, cap) _dynamic_array_make(arena, (void **)dyn, cap, sizeof(*dyn))
+
+#define dynamic_array_make(arena, dyn, cap) \
+  _dynamic_array_make(arena, (void **)dyn, cap, sizeof(*dyn))
 
 u32 dynamic_array_len(void *arr) {
   Dynamic_Array_Header *header = dynamic_array_header(arr);
   return header->len;
 }
+
+#define dynamic_array_push(dyn, item, arena) \
+  _dynamic_array_push((void **)dyn, arena, &item, sizeof(**dyn)) /* NOLINT */
 
 void _dynamic_array_push(void **arr, Arena *a, void* item, u32 item_size){
   if (*arr == 0) {
@@ -167,7 +194,7 @@ void _dynamic_array_push(void **arr, Arena *a, void* item, u32 item_size){
   memcpy(addr, item, item_size);
 }
 
-#define dynamic_array_push(dyn, item, arena) _dynamic_array_push((void **)dyn, arena, &item, sizeof(**dyn)) /* NOLINT */
+
 
 #endif
 // }}}

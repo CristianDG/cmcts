@@ -122,10 +122,10 @@ void render_ascii(Game_State *s) {
   // debug_iterations = 0;
 }
 
-// MINIMAX {{{
-
 #define MAXIMISING_PLAYER 'X'
 #define MINIMISING_PLAYER 'O'
+
+// MINIMAX {{{
 
 #define MINIMAX_MAX_VALUE INT8_MAX
 #define MINIMAX_MIN_VALUE INT8_MIN
@@ -239,11 +239,12 @@ Minimax_Action minimin(Game_State s, Action a, int8_t alpha, int8_t beta){
 typedef struct mcts_node {
   Arena *backing_arena;
   struct mcts_node *parent;
-  // TODO: mudar para dynamic_array
+
+  // TODO: remover
   struct mcts_node *first_child;
+
   struct mcts_node *sibling;
   struct mcts_node **dyn_children;
-  // TODO: mudar para `Action` ...?
   Game_State state;
   Action action_taken;
   i32 visits;
@@ -251,6 +252,7 @@ typedef struct mcts_node {
 } MCTS_Node;
 
 
+// FIXME: para `MINIMISING_PLAYER` essa função está escolhendo errado
 MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
   f32 best_score = -INFINITY;
 
@@ -386,6 +388,7 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
     }
 
     // expansão
+    // NOTE: trocar por `dynamic_array_len(node->dyn_children) > 0`
     while (!node->first_child && !terminated(&node->state)) {
       expand(node);
     }
@@ -491,11 +494,11 @@ int tic_tac_toe_main() {
     Action action = {};
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 10000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
-      action = minimax(&game_state);
-      // action = monte_carlo_tree_search(&arena, &game_state, 100, sqrt(2));
+      // action = minimax(&game_state);
+      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
