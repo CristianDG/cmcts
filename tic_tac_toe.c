@@ -1,3 +1,4 @@
+#define DG_ARENA_DEBUG
 #include "platform_cdg.c"
 
 #include <assert.h>
@@ -253,7 +254,7 @@ typedef struct mcts_node {
 
 
 // FIXME: para `MINIMISING_PLAYER` essa função está escolhendo errado
-MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
+MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, f32 player) {
   f32 best_score = -INFINITY;
 
   MCTS_Node *best_child = 0;
@@ -280,8 +281,10 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant) {
         dynamic_array_push(&best_children, child, tmp.arena);
       }
     }
+    assert(dynamic_array_len(best_children) > 0);
+    u32 idx = rand() % dynamic_array_len(best_children);
     // TODO: random selection
-    best_child = best_children[0];
+    best_child = best_children[idx];
   }
   temp_arena_memory_end(tmp);
   return best_child;
@@ -333,7 +336,7 @@ Action get_random_action(Action_List *list) {
   return list->actions[idx];
 }
 
-i32 random_simulate(Game_State *s) {
+i32 random_simulate(Game_State *s, char player) {
   // FIXME: bugado
   char winner = 0;
   while (winner == 0) {
@@ -345,11 +348,12 @@ i32 random_simulate(Game_State *s) {
     winner = terminated(s);
   }
   i32 res = 0;
-  switch (winner) {
-    case MAXIMISING_PLAYER: { res = +1; } break;
-    case MINIMISING_PLAYER: { res = -1; } break;
-    case '-': { res = 0; } break;
-    default: { assert(false); } break;
+  if (winner == '-') {
+    res = 0;
+  } else if (winner == player) {
+    res = 1;
+  } else {
+    res = -1;
   }
   return res;
 }
@@ -375,6 +379,7 @@ MCTS_Node *get_best_child(MCTS_Node *node) {
 Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 exploration_constant) {
   assert(iterations > 0);
 
+  char player = s->player;
   MCTS_Node *root = arena_alloc(arena, sizeof(MCTS_Node));
   root->backing_arena = arena;
   root->state = *s;
@@ -384,7 +389,7 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
 
     // seleção
     while (node->first_child && !terminated(&node->state)) {
-      node = uct_select(node, exploration_constant);
+      node = uct_select(node, exploration_constant, player);
     }
 
     // expansão
@@ -399,7 +404,7 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
     }
 
     // retropropagação
-    i32 result = random_simulate(&node->state);
+    i32 result = random_simulate(&node->state, player);
     back_propagate(node, result);
 
   }
@@ -411,54 +416,12 @@ Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 
 
 // }}}
 
-// Q-Learning {{{
+// softmax {{{
 
-/*
- action_bits      | state bits
- player x? | spot | x table   | o table   | empty table
- 0         | 0000 | 000000000 | 000000000 | 000000000
- * */
-typedef u32 Q_Table_State;
-
-// TODO: ver se está correto
-typedef Q_Table_State Q_Table[9][9 * 9 * 9];
-
-void treinar(
-  Q_Table *q_table,
-  Game_State *state,
-  char player,
-  f32 learning_rate,
-  f32 discount_factor,
-  f32 exploration_prob,
-  f32 epochs
-) {
-  for (i32 epoch = 0; epoch < epochs; epoch++){
-    Game_State scratch_state = *state;
-    for (;;) {
-      Action_List action_list = possible_actions(&scratch_state);
-      Action action = get_random_action(&action_list);
-      simulate(&scratch_state, action);
-      char winner = terminated(&scratch_state);
-
-      f32 reward;
-      if (winner) {
-        reward = termination_value(winner);
-        // TODO: break?
-        break;
-      } else {
-        // TODO: remover alguma coisa de reward
-      }
-    }
-  }
-}
-
-void print_table(Q_Table *q_table);
-
-Action q_learning(
-  Q_Table *q_table,
-  Game_State *state,
-  char player
-);
+typedef struct {
+  f32 *biases;
+  f32 *weights;
+} Soft_Max;
 
 // }}}
 
@@ -479,7 +442,7 @@ Action receive_input(Game_State *s) {
 }
 // }}}
 
-int tic_tac_toe_main() {
+int main() {
   srand(time(0));
 
   Game_State game_state = {
@@ -492,15 +455,17 @@ int tic_tac_toe_main() {
   while (!game_state.game_over) {
     render_ascii(&game_state);
     Action action = {};
+    // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 10000000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 100000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 10000000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 100000, sqrt(2));
       // action = receive_input(&game_state);
     }
+    arena_clear(&arena);
     simulate(&game_state, action);
     winner = terminated(&game_state);
     if (winner) game_state.game_over = true;

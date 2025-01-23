@@ -72,12 +72,11 @@ void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem){
 }
 
 // TODO: add alignment
-void *dg_arena_alloc(Arena *arena, uintptr size) {
-  // NOTE: não sei se eu deveria usar assert ou um if
-  assert(arena->cursor + size < arena->size);
-  // if (arena->cursor + size > arena->size) {
-  //   return 0;
-  // }
+void *_arena_alloc(Arena *arena, uintptr size) {
+  // acredito que um if é melhor que um assert aqui
+  if (arena->cursor + size > arena->size) {
+    return 0;
+  }
   void *ptr = &arena->data[arena->cursor];
   memset(ptr, 0, size);
   arena->cursor += size;
@@ -85,9 +84,9 @@ void *dg_arena_alloc(Arena *arena, uintptr size) {
 }
 
 // TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
-void *dg_debug_arena_alloc(Arena *arena, uintptr size, char *file, i32 line) {
+void *_debug_arena_alloc(Arena *arena, uintptr size, char *file, i32 line) {
   // TODO: registrar onde foram todas as alocações
-  void *ptr = dg_arena_alloc(arena, size);
+  void *ptr = _arena_alloc(arena, size);
   if (ptr == 0) {
     fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
   }
@@ -96,9 +95,11 @@ void *dg_debug_arena_alloc(Arena *arena, uintptr size, char *file, i32 line) {
 
 
 #if defined(DG_ARENA_DEBUG)
-#define arena_alloc(arena, size) dg_debug_arena_alloc(arena, size, __FILE__, __LINE__)
+#define arena_alloc(arena, size) _debug_arena_alloc(arena, size, __FILE__, __LINE__)
+#define arena_alloc_pass_loc(arena, size, file, line) _debug_arena_alloc(arena, size, file, line)
 #else
-#define arena_alloc(arena, size) dg_arena_alloc(arena, size)
+#define arena_alloc(arena, size) _arena_alloc(arena, size)
+#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size)
 #endif //DG_ARENA_DEBUG
 
 // TODO:
@@ -118,6 +119,11 @@ void arena_release(Arena arena) {
 #define CDG_CONTAINER_C
 // TODO: include arena.c
 
+#define dynamic_array_make(arena, dyn, cap) \
+  _dynamic_array_make(arena, (void **)dyn, cap, sizeof(*dyn))
+
+#define dynamic_array_push(dyn, item, arena) \
+  _dynamic_array_push((void **)dyn, arena, &item, sizeof(**dyn)) /* NOLINT */
 
 // NOTE: implementation from https://www.youtube.com/watch?v=_KSKH8C9Gf0 and https://nullprogram.com/blog/2023/10/05/
 typedef struct {
@@ -127,7 +133,7 @@ typedef struct {
   u8  magic[4];
 } Dynamic_Array_Header;
 
-// FIXME: stack smashing
+
 Dynamic_Array_Header *dynamic_array_header(void *arr) {
   assert(arr != 0);
 
@@ -138,7 +144,6 @@ Dynamic_Array_Header *dynamic_array_header(void *arr) {
   assert(res->magic[3] == 0);
   return res;
 }
-
 
 void dynamic_array_grow(void **arr, Arena *a){
   Dynamic_Array_Header *header = dynamic_array_header(*arr);
@@ -154,12 +159,10 @@ void dynamic_array_grow(void **arr, Arena *a){
   *arr = new_place + sizeof(Dynamic_Array_Header);
 }
 
-
 void dynamic_array_clear(void *arr){
   Dynamic_Array_Header *header = dynamic_array_header(arr);
   header->len = 0;
 }
-
 
 void _dynamic_array_make(Arena *a, void **arr, u32 initial_capacity, u32 item_size){
   Dynamic_Array_Header *header = arena_alloc(a, sizeof(Dynamic_Array_Header) + (item_size * initial_capacity));
@@ -174,21 +177,15 @@ void _dynamic_array_make(Arena *a, void **arr, u32 initial_capacity, u32 item_si
   *arr = header + 1;
 }
 
-
-#define dynamic_array_make(arena, dyn, cap) \
-  _dynamic_array_make(arena, (void **)dyn, cap, sizeof(*dyn))
-
 u32 dynamic_array_len(void *arr) {
   Dynamic_Array_Header *header = dynamic_array_header(arr);
   return header->len;
 }
 
-#define dynamic_array_push(dyn, item, arena) \
-  _dynamic_array_push((void **)dyn, arena, &item, sizeof(**dyn)) /* NOLINT */
-
 void _dynamic_array_push(void **arr, Arena *a, void* item, u32 item_size){
   if (*arr == 0) {
-    _dynamic_array_make(a, arr, 32, item_size);
+    u32 initial_capacity = 32;
+    _dynamic_array_make(a, arr, initial_capacity, item_size);
   }
   Dynamic_Array_Header *header = dynamic_array_header(*arr);
   if (header->len >= header->cap) {
@@ -198,7 +195,6 @@ void _dynamic_array_push(void **arr, Arena *a, void* item, u32 item_size){
   void *addr = ((void*)*arr) + (header->len++ * header->item_size);
   memcpy(addr, item, item_size);
 }
-
 
 
 #endif
