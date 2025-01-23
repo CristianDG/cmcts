@@ -313,6 +313,8 @@ void expand(MCTS_Node *node){
       // add to linked list
       .sibling = prev_sibling,
     };
+    // TODO: gostaria de remover essa linha
+    dynamic_array_make(new_node->backing_arena, &new_node->dyn_children, 4);
 
     dynamic_array_push(&node->dyn_children, new_node, node->backing_arena);
 
@@ -378,28 +380,30 @@ MCTS_Node *get_best_child(MCTS_Node *node) {
 
 Action monte_carlo_tree_search(Arena *arena, Game_State *s, i32 iterations, f32 exploration_constant) {
   assert(iterations > 0);
-
   char player = s->player;
-  MCTS_Node *root = arena_alloc(arena, sizeof(MCTS_Node));
-  root->backing_arena = arena;
+
+  Arena scratch = *arena;
+  MCTS_Node *root = arena_alloc(&scratch, sizeof(MCTS_Node));
+  dynamic_array_make(&scratch, &root->dyn_children, 8);
+  root->backing_arena = &scratch;
   root->state = *s;
 
   for (i32 i = 0; i < iterations; ++i) {
     MCTS_Node *node = root;
 
     // seleção
-    while (node->first_child && !terminated(&node->state)) {
+    while (dynamic_array_len(node->dyn_children) > 0 && !terminated(&node->state)) {
       node = uct_select(node, exploration_constant, player);
     }
 
     // expansão
     // NOTE: trocar por `dynamic_array_len(node->dyn_children) > 0`
-    while (!node->first_child && !terminated(&node->state)) {
+    while (dynamic_array_len(node->dyn_children) == 0 && !terminated(&node->state)) {
       expand(node);
     }
 
     // simulação
-    if (node->first_child) {
+    if (dynamic_array_len(node->dyn_children) > 0) {
       node = get_random_node(node);
     }
 
@@ -458,14 +462,13 @@ int main() {
     // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 100000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 100000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     }
-    arena_clear(&arena);
     simulate(&game_state, action);
     winner = terminated(&game_state);
     if (winner) game_state.game_over = true;
