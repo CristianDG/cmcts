@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+// TODO: trocar pelo meu assert
+#include <assert.h>
 
 #define MAX(x, y) (x >= y ? x : y)
 #define MIN(x, y) (x <= y ? x : y)
@@ -71,6 +73,11 @@ void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem){
 
 // TODO: add alignment
 void *dg_arena_alloc(Arena *arena, uintptr size) {
+  // NOTE: não sei se eu deveria usar assert ou um if
+  assert(arena->cursor + size < arena->size);
+  // if (arena->cursor + size > arena->size) {
+  //   return 0;
+  // }
   void *ptr = &arena->data[arena->cursor];
   memset(ptr, 0, size);
   arena->cursor += size;
@@ -81,9 +88,8 @@ void *dg_arena_alloc(Arena *arena, uintptr size) {
 void *dg_debug_arena_alloc(Arena *arena, uintptr size, char *file, i32 line) {
   // TODO: registrar onde foram todas as alocações
   void *ptr = dg_arena_alloc(arena, size);
-  if (arena->cursor + size > arena->size) {
+  if (ptr == 0) {
     fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
-    return 0;
   }
   return ptr;
 }
@@ -112,7 +118,6 @@ void arena_release(Arena arena) {
 #define CDG_CONTAINER_C
 // TODO: include arena.c
 
-#include <assert.h>
 
 // NOTE: implementation from https://www.youtube.com/watch?v=_KSKH8C9Gf0 and https://nullprogram.com/blog/2023/10/05/
 typedef struct {

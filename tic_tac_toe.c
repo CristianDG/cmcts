@@ -494,11 +494,11 @@ int tic_tac_toe_main() {
     Action action = {};
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 10000000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(&arena, &game_state, 1000000, sqrt(2));
+      action = monte_carlo_tree_search(&arena, &game_state, 10000000, sqrt(2));
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
