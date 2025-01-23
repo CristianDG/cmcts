@@ -248,8 +248,8 @@ typedef struct mcts_node {
   struct mcts_node **dyn_children;
   Game_State state;
   Action action_taken;
-  i32 visits;
-  i32 wins;
+  u64 visits;
+  i64 wins;
 } MCTS_Node;
 
 
@@ -261,7 +261,7 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, f32 player) {
   Temorary_Arena_Memory tmp = temp_arena_memory_begin(node->backing_arena);
   {
     MCTS_Node **best_children;
-    dynamic_array_make(tmp.arena, &best_children, 32); // NOLINT
+    dynamic_array_make(tmp.arena, &best_children, 8); // NOLINT
     for (i32 i = 0; i < dynamic_array_len(node->dyn_children); i++) {
       MCTS_Node *child = node->dyn_children[i];
       f32 score = 0;
@@ -339,7 +339,7 @@ Action get_random_action(Action_List *list) {
 }
 
 i32 random_simulate(Game_State *s, char player) {
-  // FIXME: bugado
+  // FIXME: descobrir pq está bugado e se está bugado, já que eu não sei escrever comentários que prestam
   char winner = 0;
   while (winner == 0) {
     Action_List list = possible_actions(s);
@@ -452,7 +452,7 @@ int main() {
     .player = 'O'
   };
 
-  Arena arena = arena_init_malloc(1024 * 1024);
+  Arena arena = arena_init_malloc(20 * MEGABYTE);
 
   char winner;
   while (!game_state.game_over) {
@@ -461,11 +461,11 @@ int main() {
     // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
+      action = monte_carlo_tree_search(arena, &game_state, 100000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
+      action = monte_carlo_tree_search(arena, &game_state, 100000, sqrt(2));
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);

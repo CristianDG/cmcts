@@ -28,6 +28,9 @@ typedef intptr_t  intptr;
 
 typedef u32 b32;
 
+#define KILOBYTE 1024
+#define MEGABYTE 1048576
+
 #endif
 // }}}
 
@@ -52,7 +55,7 @@ typedef struct {
   u32 cursor;
 } Temorary_Arena_Memory;
 
-Arena arena_init_malloc(u32 size) {
+Arena arena_init_malloc(u64 size) {
   void *data = malloc(size);
 
   return (Arena){
@@ -191,6 +194,7 @@ void _dynamic_array_push(void **arr, Arena *a, void* item, u32 item_size){
   if (header->len >= header->cap) {
     dynamic_array_grow(arr, a);
   }
+  assert(*arr != 0);
 
   void *addr = ((void*)*arr) + (header->len++ * header->item_size);
   memcpy(addr, item, item_size);
