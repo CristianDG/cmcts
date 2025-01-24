@@ -10,6 +10,8 @@
 #define MAX(x, y) (x >= y ? x : y)
 #define MIN(x, y) (x <= y ? x : y)
 
+#define is_power_of_two(x) ((x != 0) && ((x & (x - 1)) == 0))
+
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -22,9 +24,6 @@ typedef int64_t i64;
 
 typedef float  f32;
 typedef double f64;
-
-typedef uintptr_t uintptr;
-typedef intptr_t  intptr;
 
 typedef u32 b32;
 
@@ -41,6 +40,8 @@ typedef u32 b32;
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h> // for memset
+
+#define DEFAULT_ALIGNMENT 16
 
 typedef struct {
   u8 *data;
@@ -63,6 +64,47 @@ Arena arena_init_malloc(u64 size) {
     .size = size,
   };
 }
+// implementation from https://dylanfalconer.com/articles/the-arena-custom-memory-allocators
+uintptr_t align_forward(uintptr_t ptr, size_t alignment) {
+    uintptr_t p, a, modulo;
+    if (!is_power_of_two(alignment)) {
+        return 0;
+    }
+
+    p = ptr;
+    a = (uintptr_t)alignment;
+    modulo = p & (a - 1);
+
+    if (modulo) {
+        p += a - modulo;
+    }
+
+    return p;
+}
+
+// TODO: add alignment
+void *_arena_alloc(Arena *arena, size_t size, size_t alignment) {
+  uintptr_t curr_ptr = (uintptr_t)arena->data + (uintptr_t)arena->cursor;
+  uintptr_t offset = align_forward(curr_ptr, alignment);
+  offset -= (uintptr_t)arena->data;
+  // acredito que um if é melhor que um assert aqui
+  if (offset + size > arena->size) {
+    return 0;
+  }
+  void *ptr = (void *)arena->data + offset;
+  arena->cursor = offset + size;
+  return memset(ptr, 0, size);
+}
+
+// TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
+void *_debug_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line) {
+  // TODO: registrar onde foram todas as alocações
+  void *ptr = _arena_alloc(arena, size, alignment);
+  if (ptr == 0) {
+    fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
+  }
+  return ptr;
+}
 
 Temorary_Arena_Memory temp_arena_memory_begin(Arena *a){
   return (Temorary_Arena_Memory) {
@@ -74,35 +116,13 @@ void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem){
   tmp_mem.arena->cursor = tmp_mem.cursor;
 }
 
-// TODO: add alignment
-void *_arena_alloc(Arena *arena, uintptr size) {
-  // acredito que um if é melhor que um assert aqui
-  if (arena->cursor + size > arena->size) {
-    return 0;
-  }
-  void *ptr = &arena->data[arena->cursor];
-  memset(ptr, 0, size);
-  arena->cursor += size;
-  return ptr;
-}
-
-// TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
-void *_debug_arena_alloc(Arena *arena, uintptr size, char *file, i32 line) {
-  // TODO: registrar onde foram todas as alocações
-  void *ptr = _arena_alloc(arena, size);
-  if (ptr == 0) {
-    fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
-  }
-  return ptr;
-}
-
 
 #if defined(DG_ARENA_DEBUG)
-#define arena_alloc(arena, size) _debug_arena_alloc(arena, size, __FILE__, __LINE__)
-#define arena_alloc_pass_loc(arena, size, file, line) _debug_arena_alloc(arena, size, file, line)
+#define arena_alloc(arena, size) _debug_arena_alloc(arena, size, DEFAULT_ALIGNMENT, __FILE__, __LINE__)
+#define arena_alloc_pass_loc(arena, size, file, line) _debug_arena_alloc(arena, size, DEFAULT_ALIGNMENT, file, line)
 #else
-#define arena_alloc(arena, size) _arena_alloc(arena, size)
-#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size)
+#define arena_alloc(arena, size) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
+#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
 #endif //DG_ARENA_DEBUG
 
 // TODO:
