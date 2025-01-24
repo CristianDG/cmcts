@@ -242,10 +242,10 @@ typedef struct mcts_node {
   struct mcts_node *parent;
 
   // TODO: remover
-  struct mcts_node *first_child;
+  // struct mcts_node *first_child;
 
-  struct mcts_node *sibling;
-  struct mcts_node **dyn_children;
+  // struct mcts_node *sibling;
+  Dynamic_Array(struct mcts_node) dyn_children;
   Game_State state;
   Action action_taken;
   u64 visits;
@@ -260,10 +260,9 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, f32 player) {
   MCTS_Node *best_child = 0;
   Temorary_Arena_Memory tmp = temp_arena_memory_begin(node->backing_arena);
   {
-    MCTS_Node **best_children;
-    dynamic_array_make(tmp.arena, &best_children, 8); // NOLINT
-    for (i32 i = 0; i < dynamic_array_len(node->dyn_children); i++) {
-      MCTS_Node *child = node->dyn_children[i];
+    Dynamic_Array(MCTS_Node*) best_children = {};
+    for (i32 i = 0; i < node->dyn_children.len; i++) {
+      MCTS_Node *child = &node->dyn_children.data[i];
       f32 score = 0;
       if (child->visits == 0) {
         score = INFINITY;
@@ -275,16 +274,16 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, f32 player) {
 
       if (score > best_score) {
         best_score = score;
-        dynamic_array_clear(best_children);
+        dynamic_array_clear(&best_children);
         dynamic_array_push(&best_children, child, tmp.arena);
       } else if (score == best_score) {
         dynamic_array_push(&best_children, child, tmp.arena);
       }
     }
-    assert(dynamic_array_len(best_children) > 0);
-    u32 idx = rand() % dynamic_array_len(best_children);
+    assert(best_children.len > 0);
+    u32 idx = rand() % best_children.len;
     // TODO: random selection
-    best_child = best_children[idx];
+    best_child = best_children.data[idx];
   }
   temp_arena_memory_end(tmp);
   return best_child;
@@ -296,32 +295,21 @@ void expand(MCTS_Node *node){
   Action_List action_list = possible_actions(&node->state);
   assert(action_list.size > 0);
 
-  MCTS_Node *prev_sibling = 0;
   for (int i = 0; i < action_list.size; ++i) {
     Action action = action_list.actions[i];
     Game_State state_copy = node->state;
     simulate(&state_copy, action);
 
-    MCTS_Node *new_node = arena_alloc(node->backing_arena, sizeof(MCTS_Node));
-
-    *new_node = (MCTS_Node){
+    MCTS_Node new_node = {
       .backing_arena = node->backing_arena,
       .action_taken = action,
       .state = state_copy,
       // add to tree
       .parent = node,
       // add to linked list
-      .sibling = prev_sibling,
     };
-    // TODO: gostaria de remover essa linha
-    dynamic_array_make(new_node->backing_arena, &new_node->dyn_children, 4);
-
     dynamic_array_push(&node->dyn_children, new_node, node->backing_arena);
 
-    if (!node->first_child) {
-      node->first_child = new_node;
-    }
-    prev_sibling = new_node;
   }
 }
 
@@ -361,16 +349,16 @@ i32 random_simulate(Game_State *s, char player) {
 }
 
 MCTS_Node *get_random_node(MCTS_Node *node) {
-  i32 idx = rand() % dynamic_array_len(node->dyn_children);
-  MCTS_Node *res = node->dyn_children[idx];
+  i32 idx = rand() % node->dyn_children.len;
+  MCTS_Node *res = &node->dyn_children.data[idx];
   assert(res != 0);
   return res;
 }
 
 MCTS_Node *get_best_child(MCTS_Node *node) {
-  MCTS_Node *best_node = node->dyn_children[0];
-  for (i32 i = 0; i < dynamic_array_len(node->dyn_children); ++i) {
-    MCTS_Node *child = node->dyn_children[i];
+  MCTS_Node *best_node = &node->dyn_children.data[0];
+  for (i32 i = 0; i < node->dyn_children.len; ++i) {
+    MCTS_Node *child = &node->dyn_children.data[i];
     if (child->wins > best_node->wins) {
       best_node = child;
     }
@@ -383,7 +371,6 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
   char player = s->player;
 
   MCTS_Node *root = arena_alloc(&scratch, sizeof(MCTS_Node));
-  dynamic_array_make(&scratch, &root->dyn_children, 8);
   root->backing_arena = &scratch;
   root->state = *s;
 
@@ -391,18 +378,18 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
     MCTS_Node *node = root;
 
     // seleção
-    while (dynamic_array_len(node->dyn_children) > 0 && !terminated(&node->state)) {
+    while (node->dyn_children.len > 0 && !terminated(&node->state)) {
       node = uct_select(node, exploration_constant, player);
     }
 
     // expansão
     // NOTE: trocar por `dynamic_array_len(node->dyn_children) > 0`
-    while (dynamic_array_len(node->dyn_children) == 0 && !terminated(&node->state)) {
+    while (node->dyn_children.len == 0 && !terminated(&node->state)) {
       expand(node);
     }
 
     // simulação
-    if (dynamic_array_len(node->dyn_children) > 0) {
+    if (node->dyn_children.len > 0) {
       node = get_random_node(node);
     }
 
@@ -413,6 +400,8 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
   }
 
   MCTS_Node *best_child = get_best_child(root);
+  assert(root->visits == iterations);
+  assert(best_child->visits <= iterations);
   return best_child->action_taken;
 }
 
@@ -461,11 +450,11 @@ int main() {
     // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(arena, &game_state, 100000, sqrt(2));
+      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     } else {
       // action = minimax(&game_state);
-      action = monte_carlo_tree_search(arena, &game_state, 100000, sqrt(2));
+      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
       // action = receive_input(&game_state);
     }
     simulate(&game_state, action);
