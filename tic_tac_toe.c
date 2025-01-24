@@ -254,7 +254,7 @@ typedef struct mcts_node {
 
 
 // FIXME: para `MINIMISING_PLAYER` essa função está escolhendo errado
-MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, f32 player) {
+MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, char player) {
   f32 best_score = -INFINITY;
 
   MCTS_Node *best_child = 0;
