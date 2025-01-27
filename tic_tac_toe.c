@@ -410,15 +410,77 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
 
 // softmax {{{
 
-typedef struct {
-  f32 *biases;
-  f32 *weights;
-} Soft_Max;
+// typedef struct {
+//   CDG_Matrix *activations;
+//   CDG_Matrix *weights;
+//   CDG_Matrix *biases;
+// } Model;
+
+
+f32 sigmoid(f32 x) {
+  return 1.f / (1.f + exp(-x));
+}
+
+void apply_sigmoid(CDG_Matrix m) {
+  for(u32 r = 0; r < m.rows; ++r) {
+    for(u32 c = 0; c < m.cols; ++c) {
+        M_AT(m, r, c) = sigmoid(M_AT(m, r, c));
+    }
+  }
+}
+
+f32 randf(){
+  return (f32) rand() / (f32) RAND_MAX;
+}
+
+void matrix_randomize(CDG_Matrix m){
+  for(u32 r = 0; r < m.rows; ++r) {
+    for(u32 c = 0; c < m.cols; ++c) {
+        M_AT(m, r, c) = randf()*(1.f - 0.f) + 0.f;
+    }
+  }
+}
+
+void use_model(Arena *a){
+  CDG_Matrix a0 = matrix_alloc(a, 1, 2);
+
+  CDG_Matrix w1 = matrix_alloc(a, 2, 2);
+  CDG_Matrix b1 = matrix_alloc(a, 1, 2);
+  CDG_Matrix a1 = matrix_alloc(a, 1, 2);
+
+  CDG_Matrix w2 = matrix_alloc(a, 2, 1);
+  CDG_Matrix b2 = matrix_alloc(a, 1, 1);
+  CDG_Matrix a2 = matrix_alloc(a, 1, 1);
+
+  // init {{{
+  M_AT(a0, 0, 0) = 0;
+  M_AT(a0, 0, 1) = 1;
+
+  matrix_randomize(w1);
+  matrix_randomize(b1);
+  matrix_randomize(w2);
+  matrix_randomize(b2);
+  // }}}
+
+  // forward {{{
+  matrix_dot_in_place(a1, a0, w1);
+  matrix_sum_in_place(a1, a1, b1);
+  apply_sigmoid(a1);
+
+  matrix_dot_in_place(a2, a1, w2);
+  matrix_sum_in_place(a2, a2, b2);
+  apply_sigmoid(a2);
+  // }}}
+
+  printf("%f\n", *a2.data);
+}
+
+
 
 // }}}
 
 // human input {{{
-Action receive_input(Game_State *s) {
+Action receive_stdin_input(Game_State *s) {
   printf("%c, provide a number between 1 and 9: ", s->player);
   int pos;
 
@@ -434,14 +496,18 @@ Action receive_input(Game_State *s) {
 }
 // }}}
 
-int main() {
+int tic_tac_toe_main() {
   srand(time(0));
+  Arena arena = arena_init_malloc(20 * MEGABYTE);
+
+  use_model(&arena);
+  return 0;
+
 
   Game_State game_state = {
     .player = 'O'
   };
 
-  Arena arena = arena_init_malloc(20 * MEGABYTE);
 
   char winner;
   while (!game_state.game_over) {
@@ -451,11 +517,11 @@ int main() {
     if (game_state.player == 'O') {
       // action = minimax(&game_state);
       action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
-      // action = receive_input(&game_state);
+      // action = receive_stdin_input(&game_state);
     } else {
       // action = minimax(&game_state);
       action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
-      // action = receive_input(&game_state);
+      // action = receive_stdin_input(&game_state);
     }
     simulate(&game_state, action);
     winner = terminated(&game_state);
