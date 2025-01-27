@@ -3,3 +3,6 @@
 .idea/
 .project
 .gdb_history
+*.exe
+*.ilk
+*.pdb
