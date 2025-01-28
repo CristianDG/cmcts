@@ -219,12 +219,12 @@ void _dynamic_array_clear(_Any_Dynamic_Array *arr) {
 typedef struct {
   f32 *data;
   u32 rows, cols;
-} CDG_Matrix;
+} DG_Matrix;
 
-#define M_AT(mat, row, col) (mat).data[row*(mat).cols + col]
+#define MAT_AT(mat, row, col) (mat).data[row*(mat).cols + col]
 
-CDG_Matrix matrix_alloc(Arena *a, u32 rows, u32 cols){
-  CDG_Matrix m = {
+DG_Matrix matrix_alloc(Arena *a, u32 rows, u32 cols){
+  DG_Matrix m = {
     .rows = rows,
     .cols = cols,
   };
@@ -234,26 +234,26 @@ CDG_Matrix matrix_alloc(Arena *a, u32 rows, u32 cols){
 }
 
 // NOTE: não sei como me sinto passando um valor por cópia mesmo sabendo que ele vai ser modificado
-void matrix_fill(CDG_Matrix m, f32 val) {
+void matrix_fill(DG_Matrix m, f32 val) {
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
-      M_AT(m, r, c) = val;
+      MAT_AT(m, r, c) = val;
     }
   }
 }
 
-void matrix_sum_in_place(CDG_Matrix dst, CDG_Matrix a, CDG_Matrix b) {
+void matrix_sum_in_place(DG_Matrix dst, DG_Matrix a, DG_Matrix b) {
   DG_ASSERT(a.rows == b.rows);
   DG_ASSERT(a.cols == b.cols);
 
   for(u32 r = 0; r < dst.rows; ++r) {
     for(u32 c = 0; c < dst.cols; ++c) {
-        M_AT(dst, r, c) = M_AT(a, r, c) + M_AT(b, r, c);
+        MAT_AT(dst, r, c) = MAT_AT(a, r, c) + MAT_AT(b, r, c);
     }
   }
 }
 
-void matrix_dot_in_place(CDG_Matrix dst, CDG_Matrix a, CDG_Matrix b) {
+void matrix_dot_in_place(DG_Matrix dst, DG_Matrix a, DG_Matrix b) {
   DG_ASSERT(a.cols == b.rows);
   DG_ASSERT(dst.cols == b.cols);
   DG_ASSERT(dst.rows == a.rows);
@@ -262,25 +262,25 @@ void matrix_dot_in_place(CDG_Matrix dst, CDG_Matrix a, CDG_Matrix b) {
     for(u32 c = 0; c < dst.cols; ++c) {
       f32 val = 0;
       for (u32 k = 0; k < a.cols; ++k) {
-         val += M_AT(a, r, k) * M_AT(b, k, c);
+         val += MAT_AT(a, r, k) * MAT_AT(b, k, c);
       }
-      M_AT(dst, r, c) = val;
+      MAT_AT(dst, r, c) = val;
     }
   }
 }
 
-CDG_Matrix matrix_dot(Arena *arena, CDG_Matrix a, CDG_Matrix b) {
-  CDG_Matrix res = matrix_alloc(arena, a.rows, b.cols);
+DG_Matrix matrix_dot(Arena *arena, DG_Matrix a, DG_Matrix b) {
+  DG_Matrix res = matrix_alloc(arena, a.rows, b.cols);
   matrix_dot_in_place(res, a, b);
   return res;
 }
 
-void dg_matrix_print(CDG_Matrix m, char *name) {
+void dg_matrix_print(DG_Matrix m, char *name) {
   printf("%s = [ \n", name);
   for(u32 r = 0; r < m.rows; ++r) {
     printf("    ");
     for(u32 c = 0; c < m.cols; ++c) {
-      printf(" %f", M_AT(m, r, c));
+      printf(" %f", MAT_AT(m, r, c));
     }
     printf("\n");
   }

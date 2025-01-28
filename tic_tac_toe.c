@@ -421,10 +421,10 @@ f32 sigmoid(f32 x) {
   return 1.f / (1.f + exp(-x));
 }
 
-void apply_sigmoid(CDG_Matrix m) {
+void apply_sigmoid(DG_Matrix m) {
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
-        M_AT(m, r, c) = sigmoid(M_AT(m, r, c));
+        MAT_AT(m, r, c) = sigmoid(MAT_AT(m, r, c));
     }
   }
 }
@@ -433,48 +433,188 @@ f32 randf(){
   return (f32) rand() / (f32) RAND_MAX;
 }
 
-void matrix_randomize(CDG_Matrix m){
+void matrix_randomize(DG_Matrix m){
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
-        M_AT(m, r, c) = randf()*(1.f - 0.f) + 0.f;
+        MAT_AT(m, r, c) = randf()*(1.f - 0.f) + 0.f;
     }
   }
 }
 
-void use_model(Arena *a){
-  CDG_Matrix a0 = matrix_alloc(a, 1, 2);
+typedef struct {
+  DG_Matrix a0;
 
-  CDG_Matrix w1 = matrix_alloc(a, 2, 2);
-  CDG_Matrix b1 = matrix_alloc(a, 1, 2);
-  CDG_Matrix a1 = matrix_alloc(a, 1, 2);
+  DG_Matrix w1;
+  DG_Matrix b1;
+  DG_Matrix a1;
 
-  CDG_Matrix w2 = matrix_alloc(a, 2, 1);
-  CDG_Matrix b2 = matrix_alloc(a, 1, 1);
-  CDG_Matrix a2 = matrix_alloc(a, 1, 1);
+  DG_Matrix w2;
+  DG_Matrix b2;
+  DG_Matrix a2;
+} Xor;
 
-  // init {{{
-  M_AT(a0, 0, 0) = 0;
-  M_AT(a0, 0, 1) = 1;
+void forward(Xor model) {
+    // forward {{{
+    matrix_dot_in_place(model.a1, model.a0, model.w1);
+    matrix_sum_in_place(model.a1, model.a1, model.b1);
+    apply_sigmoid(model.a1);
 
-  matrix_randomize(w1);
-  matrix_randomize(b1);
-  matrix_randomize(w2);
-  matrix_randomize(b2);
-  // }}}
-
-  // forward {{{
-  matrix_dot_in_place(a1, a0, w1);
-  matrix_sum_in_place(a1, a1, b1);
-  apply_sigmoid(a1);
-
-  matrix_dot_in_place(a2, a1, w2);
-  matrix_sum_in_place(a2, a2, b2);
-  apply_sigmoid(a2);
-  // }}}
-
-  printf("%f\n", *a2.data);
+    matrix_dot_in_place(model.a2, model.a1, model.w2);
+    matrix_sum_in_place(model.a2, model.a2, model.b2);
+    apply_sigmoid(model.a2);
+    // }}}
 }
 
+f32 cost(Xor model, DG_Matrix inputs, DG_Matrix outputs){
+  DG_ASSERT(inputs.cols == model.a0.cols);
+  DG_ASSERT(inputs.rows == outputs.rows);
+  DG_ASSERT(outputs.cols == model.a2.cols);
+
+  u32 number_of_samples = inputs.rows;
+
+  f32 cost = 0;
+  for (u32 i = 0; i < inputs.rows; ++i) {
+    MAT_AT(model.a0, 0, 0) = MAT_AT(inputs, i, 0);
+    MAT_AT(model.a0, 0, 1) = MAT_AT(inputs, i, 1);
+
+    forward(model);
+    for (u32 j = 0; j < model.a2.cols; ++j) {
+      f32 d = MAT_AT(model.a2, 0, j) - MAT_AT(outputs, i, j);
+      cost += d * d;
+    }
+  }
+
+  return cost / (f32)number_of_samples;
+}
+
+Xor xor_alloc(Arena *a){
+  Xor model;
+  model.a0 = matrix_alloc(a, 1, 2);
+  model.w1 = matrix_alloc(a, 2, 2);
+  model.b1 = matrix_alloc(a, 1, 2);
+  model.a1 = matrix_alloc(a, 1, 2);
+  model.w2 = matrix_alloc(a, 2, 1);
+  model.b2 = matrix_alloc(a, 1, 1);
+  model.a2 = matrix_alloc(a, 1, 1);
+  return model;
+}
+
+
+void finite_diff(Xor model, Xor gradient, f32 epsilon, DG_Matrix inputs, DG_Matrix outputs) {
+  f32 saved;
+  f32 c = cost(model, inputs, outputs);
+  for (u32 i = 0; i < model.w1.rows; ++i){
+    for (u32 j = 0; j < model.w1.cols; ++j){
+      saved = MAT_AT(model.w1, i, j);
+      MAT_AT(model.w1   , i, j) += epsilon;
+      MAT_AT(gradient.w1, i, j) = (cost(model, inputs, outputs) - c)/epsilon;
+      MAT_AT(model.w1   , i, j) = saved;
+    }
+  }
+
+  for (u32 i = 0; i < model.b1.rows; ++i){
+    for (u32 j = 0; j < model.b1.cols; ++j){
+      saved = MAT_AT(model.b1, i, j);
+      MAT_AT(model.b1   , i, j) += epsilon;
+      MAT_AT(gradient.b1, i, j) = (cost(model, inputs, outputs) - c)/epsilon;
+      MAT_AT(model.b1   , i, j) = saved;
+    }
+  }
+
+  for (u32 i = 0; i < model.w2.rows; ++i){
+    for (u32 j = 0; j < model.w2.cols; ++j){
+      saved = MAT_AT(model.w2, i, j);
+      MAT_AT(model.w2   , i, j) += epsilon;
+      MAT_AT(gradient.w2, i, j) = (cost(model, inputs, outputs) - c)/epsilon;
+      MAT_AT(model.w2   , i, j) = saved;
+    }
+  }
+
+  for (u32 i = 0; i < model.b2.rows; ++i){
+    for (u32 j = 0; j < model.b2.cols; ++j){
+      saved = MAT_AT(model.b2, i, j);
+      MAT_AT(model.b2   , i, j) += epsilon;
+      MAT_AT(gradient.b2, i, j) = (cost(model, inputs, outputs) - c)/epsilon;
+      MAT_AT(model.b2   , i, j) = saved;
+    }
+  }
+}
+
+void xor_learn(Xor model, Xor gradient, f32 rate) {
+  for (u32 i = 0; i < model.w1.rows; ++i){
+    for (u32 j = 0; j < model.w1.cols; ++j){
+      MAT_AT(model.w1, i, j) -= rate * MAT_AT(gradient.w1, i, j);
+    }
+  }
+  for (u32 i = 0; i < model.b1.rows; ++i){
+    for (u32 j = 0; j < model.b1.cols; ++j){
+      MAT_AT(model.b1, i, j) -= rate * MAT_AT(gradient.b1, i, j);
+    }
+  }
+  for (u32 i = 0; i < model.w2.rows; ++i){
+    for (u32 j = 0; j < model.w2.cols; ++j){
+      MAT_AT(model.w2, i, j) -= rate * MAT_AT(gradient.w2, i, j);
+    }
+  }
+  for (u32 i = 0; i < model.b2.rows; ++i){
+    for (u32 j = 0; j < model.b2.cols; ++j){
+      MAT_AT(model.b2, i, j) -= rate * MAT_AT(gradient.b2, i, j);
+    }
+  }
+
+}
+
+
+void use_model(Arena *a){
+
+  Xor model = xor_alloc(a);
+  Xor gradient = xor_alloc(a);
+
+  DG_Matrix inputs = {
+    .rows = 4,
+    .cols = 2,
+    .data = (f32[]){
+      0, 0,
+      0, 1,
+      1, 0,
+      1, 1,
+    }
+  };
+
+  DG_Matrix outputs = {
+    .rows = 4,
+    .cols = 1,
+    .data = (f32[]){
+      0,
+      1,
+      1,
+      0,
+    }
+  };
+
+
+  // init {{{
+  matrix_randomize(model.w1);
+  matrix_randomize(model.b1);
+  matrix_randomize(model.w2);
+  matrix_randomize(model.b2);
+  // }}}
+
+  f32 epsilon = 1e-1;
+  f32 learning_rate = 1e-1;
+  printf("cost = %f\n", cost(model, inputs, outputs));
+  u32 epochs = 10000;
+  for (u32 i = 0; i < epochs; ++i) {
+    finite_diff(model, gradient, epsilon, inputs, outputs);
+    xor_learn(model, gradient, learning_rate);
+  }
+  printf("cost = %f\n", cost(model, inputs, outputs));
+
+  MAT_AT(model.a0, 0, 0) = 0;
+  MAT_AT(model.a0, 0, 1) = 0;
+  forward(model);
+  printf("value = %f\n", *model.a2.data);
+}
 
 
 // }}}
@@ -484,7 +624,7 @@ Action receive_stdin_input(Game_State *s) {
   printf("%c, provide a number between 1 and 9: ", s->player);
   int pos;
 
-  int res = scanf("%d", &pos);
+  int res = scanf_s("%d", &pos);
   fflush(stdin);
 
   if (!res) exit(1);
