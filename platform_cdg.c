@@ -207,7 +207,28 @@ void _dynamic_array_clear(_Any_Dynamic_Array *arr) {
 
 #define dynamic_array_clear(arr) _dynamic_array_clear((_Any_Dynamic_Array *) (arr))
 
+#define Slice(type) \
+struct { \
+  u64 len; \
+  type *data; \
+}
 
+typedef Slice(void) _Any_Slice;
+
+#define make_slice(arena, slice, len) dg_make_slice(arena, (_Any_Slice *)slice, len, sizeof(*(slice)->data))
+
+void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
+  _Any_Slice res = {};
+
+  void *data = arena_alloc(a, len * item_size);
+
+  if (data) {
+    res.len = len;
+    res.data = data;
+  }
+
+  *slice = res;
+}
 
 #endif // CDG_CONTAINER_C
 // }}}
@@ -292,11 +313,19 @@ void dg_matrix_print(DG_Matrix m, char *name) {
 #endif // CDG_MATRIX_H
 // }}}
 
-// neural networks {{{
-#ifndef CDG_NN_C
-#define CDG_NN_C
+// math {{{
+#ifndef CDG_MATH_H
+#define CDG_MATH_H
 
-// TODO:
+#include <math.h>
+f32 sigmoidf(f32 x) {
+  return 1.f / (1.f + expf(-x));
+}
 
-#endif
+f32 randf(){
+  return (f32) rand() / (f32) RAND_MAX;
+}
+
+#endif // CDG_MATH_H
 // }}}
+
