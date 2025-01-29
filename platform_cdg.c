@@ -7,6 +7,7 @@
 
 /* TODO:
  * - context cracking
+ * - assert + debugger trap
  */
 
 
@@ -252,6 +253,13 @@ DG_Matrix matrix_alloc(Arena *a, u32 rows, u32 cols){
   void* data = arena_alloc(a, sizeof(*m.data) * rows * cols);
   m.data = data;
   return m;
+}
+
+void matrix_copy(DG_Matrix dst, DG_Matrix src){
+  DG_ASSERT(src.rows == dst.rows);
+  DG_ASSERT(src.cols == dst.cols);
+
+  memcpy(dst.data, src.data, sizeof(*src.data) * src.rows * src.cols);
 }
 
 // NOTE: não sei como me sinto passando um valor por cópia mesmo sabendo que ele vai ser modificado

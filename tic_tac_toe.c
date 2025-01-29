@@ -410,12 +410,6 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
 
 // softmax {{{
 
-// typedef struct {
-//   CDG_Matrix *activations;
-//   CDG_Matrix *weights;
-//   CDG_Matrix *biases;
-// } Model;
-
 
 void apply_sigmoid(DG_Matrix m) {
   for(u32 r = 0; r < m.rows; ++r) {
@@ -425,7 +419,6 @@ void apply_sigmoid(DG_Matrix m) {
   }
 }
 
-
 void matrix_randomize(DG_Matrix m){
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
@@ -434,6 +427,7 @@ void matrix_randomize(DG_Matrix m){
   }
 }
 
+// xor {{{
 typedef struct {
   DG_Matrix a0;
 
@@ -446,64 +440,18 @@ typedef struct {
   DG_Matrix a2;
 } Xor;
 
-typedef Slice(DG_Matrix) DG_Matrix_Slice ;
-typedef struct {
-  DG_Matrix_Slice a;
-  DG_Matrix_Slice w;
-  DG_Matrix_Slice b;
-} ML_Model;
+Xor xor_alloc(Arena *a){
+  Xor model;
+  model.a0 = matrix_alloc(a, 1, 2);
+  model.a1 = matrix_alloc(a, 1, 2);
+  model.a2 = matrix_alloc(a, 1, 1);
 
-ML_Model alloc_model(Arena *a, u32 nodes_input, u32 nodes_middle, u32 nodes_output){
+  model.w1 = matrix_alloc(a, 2, 2);
+  model.w2 = matrix_alloc(a, 2, 1);
 
-  ML_Model res = {};
-
-  make_slice(a, &res.a, 3);
-  make_slice(a, &res.w, 2);
-  make_slice(a, &res.b, 2);
-
-  res.a.data[0] = matrix_alloc(a, 1, nodes_input);
-  res.a.data[1] = matrix_alloc(a, 1, nodes_middle);
-  res.a.data[2] = matrix_alloc(a, 1, nodes_output);
-
-  res.w.data[0] = matrix_alloc(a, res.a.data[0].cols, res.a.data[1].cols);
-  res.w.data[1] = matrix_alloc(a, res.a.data[1].cols, res.a.data[2].cols);
-
-  res.b.data[0] = matrix_alloc(a, res.a.data[1].rows, res.a.data[1].cols);
-  res.b.data[1] = matrix_alloc(a, res.a.data[2].rows, res.a.data[2].cols);
-
-  return res;
-}
-
-void forward_model(ML_Model model) {
-  for (u32 i = 1; i < model.a.len; ++i) {
-    matrix_dot_in_place(model.a.data[i], model.a.data[i-1], model.w.data[i-1]);
-    matrix_sum_in_place(model.a.data[i], model.a.data[i], model.b.data[i-1]);
-    apply_sigmoid(model.a.data[i]);
-  }
-}
-
-f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
-  DG_ASSERT(inputs.cols == model.a.data[0].cols);
-  DG_ASSERT(inputs.rows == outputs.rows);
-  DG_ASSERT(outputs.cols == model.a.data[2].cols);
-
-  u32 number_of_samples = inputs.rows;
-
-  f32 cost = 0;
-  for (u32 i = 0; i < inputs.rows; ++i) {
-    for (u32 j = 0; j < inputs.cols; ++j) {
-      MAT_AT(model.a.data[0], 0, j) = MAT_AT(inputs, i, j);
-    }
-
-    forward_model(model);
-
-    for (u32 j = 0; j < model.a.data[2].cols; ++j) {
-      f32 d = MAT_AT(model.a.data[2], 0, j) - MAT_AT(outputs, i, j);
-      cost += d * d;
-    }
-  }
-
-  return cost / (f32)number_of_samples;
+  model.b1 = matrix_alloc(a, 1, 2);
+  model.b2 = matrix_alloc(a, 1, 1);
+  return model;
 }
 
 void forward_xor(Xor model) {
@@ -536,48 +484,6 @@ f32 cost_xor(Xor model, DG_Matrix inputs, DG_Matrix outputs){
   }
 
   return cost / (f32)number_of_samples;
-}
-
-Xor xor_alloc(Arena *a){
-  Xor model;
-  model.a0 = matrix_alloc(a, 1, 2);
-  model.a1 = matrix_alloc(a, 1, 2);
-  model.a2 = matrix_alloc(a, 1, 1);
-
-  model.w1 = matrix_alloc(a, 2, 2);
-  model.w2 = matrix_alloc(a, 2, 1);
-
-  model.b1 = matrix_alloc(a, 1, 2);
-  model.b2 = matrix_alloc(a, 1, 1);
-  return model;
-}
-
-void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix inputs, DG_Matrix outputs) {
-  f32 saved;
-  f32 c = cost_model(model, inputs, outputs);
-  // TODO: terminar de implementar
-
-  for (u32 layer = 0; layer < model.w.len; ++layer) {
-    DG_Matrix weights_layer = model.w.data[layer];
-    DG_Matrix biases_layer = model.b.data[layer];
-
-    for (u32 i = 0; i < weights_layer.rows; ++i) {
-      for (u32 j = 0; j < weights_layer.cols; ++j) {
-        saved = MAT_AT(weights_layer, i, j);
-        MAT_AT(weights_layer, i, j) += epsilon;
-        MAT_AT(gradient.w.data[layer], i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
-        MAT_AT(weights_layer, i, j) = saved;
-      }
-    }
-    for (u32 i = 0; i < biases_layer.rows; ++i) {
-      for (u32 j = 0; j < biases_layer.cols; ++j) {
-        saved = MAT_AT(weights_layer, i, j);
-        MAT_AT(biases_layer, i, j) += epsilon;
-        MAT_AT(gradient.b.data[layer], i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
-        MAT_AT(biases_layer, i, j) = saved;
-      }
-    }
-  }
 }
 
 void finite_diff_xor(Xor model, Xor gradient, f32 epsilon, DG_Matrix inputs, DG_Matrix outputs) {
@@ -620,7 +526,6 @@ void finite_diff_xor(Xor model, Xor gradient, f32 epsilon, DG_Matrix inputs, DG_
   }
 }
 
-
 void learn_xor(Xor model, Xor gradient, f32 rate) {
   for (u32 i = 0; i < model.w1.rows; ++i){
     for (u32 j = 0; j < model.w1.cols; ++j){
@@ -642,6 +547,127 @@ void learn_xor(Xor model, Xor gradient, f32 rate) {
       MAT_AT(model.b2, i, j) -= rate * MAT_AT(gradient.b2, i, j);
     }
   }
+}
+// }}}
+
+// model {{{
+typedef Slice(DG_Matrix) DG_Matrix_Slice ;
+typedef struct {
+  DG_Matrix_Slice a;
+  DG_Matrix_Slice w;
+  DG_Matrix_Slice b;
+} ML_Model;
+
+ML_Model alloc_model(Arena *a, u32 nodes_input, u32 nodes_middle, u32 nodes_output){
+
+  ML_Model res = {};
+
+  make_slice(a, &res.a, 3);
+  make_slice(a, &res.w, 2);
+  make_slice(a, &res.b, 2);
+
+  res.a.data[0] = matrix_alloc(a, 1, nodes_input);
+  res.a.data[1] = matrix_alloc(a, 1, nodes_middle);
+  res.a.data[2] = matrix_alloc(a, 1, nodes_output);
+
+  res.w.data[0] = matrix_alloc(a, res.a.data[0].cols, res.a.data[1].cols);
+  res.w.data[1] = matrix_alloc(a, res.a.data[1].cols, res.a.data[2].cols);
+
+  res.b.data[0] = matrix_alloc(a, res.a.data[1].rows, res.a.data[1].cols);
+  res.b.data[1] = matrix_alloc(a, res.a.data[2].rows, res.a.data[2].cols);
+
+  return res;
+}
+
+void forward_model(ML_Model model) {
+  u32 layers = model.w.len;
+  for (u32 layer = 0; layer < layers; ++layer) {
+    DG_Matrix input_layer = model.a.data[layer];
+    DG_Matrix output_layer = model.a.data[layer+1];
+
+    DG_Matrix layer_bias  = model.b.data[layer];
+    DG_Matrix layer_weight = model.w.data[layer];
+
+    matrix_dot_in_place(output_layer, input_layer, layer_weight);
+    matrix_sum_in_place(output_layer, output_layer, layer_bias);
+    apply_sigmoid(output_layer);
+  }
+}
+
+f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
+  DG_ASSERT(inputs.cols == model.a.data[0].cols);
+  DG_ASSERT(inputs.rows == outputs.rows);
+  DG_ASSERT(outputs.cols == model.a.data[2].cols);
+
+  u32 number_of_samples = inputs.rows;
+
+  f32 cost = 0;
+  for (u32 i = 0; i < inputs.rows; ++i) {
+    for (u32 j = 0; j < inputs.cols; ++j) {
+      MAT_AT(model.a.data[0], 0, j) = MAT_AT(inputs, i, j);
+    }
+
+    forward_model(model);
+
+    for (u32 j = 0; j < model.a.data[2].cols; ++j) {
+      f32 d = MAT_AT(model.a.data[2], 0, j) - MAT_AT(outputs, i, j);
+      cost += d * d;
+    }
+  }
+
+  return cost / (f32)number_of_samples;
+}
+
+void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix inputs, DG_Matrix outputs) {
+  f32 saved;
+  f32 c = cost_model(model, inputs, outputs);
+
+  // TODO: fazer algo com offset_of?
+
+  for (u32 layer = 0; layer < model.w.len; ++layer) {
+    {
+      DG_Matrix weights_layer = model.w.data[layer];
+      for (u32 i = 0; i < weights_layer.rows; ++i) {
+        for (u32 j = 0; j < weights_layer.cols; ++j) {
+          saved = MAT_AT(weights_layer, i, j);
+          MAT_AT(weights_layer, i, j) += epsilon;
+          MAT_AT(gradient.w.data[layer], i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
+          MAT_AT(weights_layer, i, j) = saved;
+        }
+      }
+    }
+    {
+      DG_Matrix biases_layer = model.b.data[layer];
+      for (u32 i = 0; i < biases_layer.rows; ++i) {
+        for (u32 j = 0; j < biases_layer.cols; ++j) {
+          saved = MAT_AT(biases_layer, i, j);
+          MAT_AT(biases_layer, i, j) += epsilon;
+          MAT_AT(gradient.b.data[layer], i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
+          MAT_AT(biases_layer, i, j) = saved;
+        }
+      }
+    }
+  }
+}
+
+void learn_model(ML_Model model, ML_Model gradient, f32 rate) {
+
+  for (u32 layer = 0; layer < model.w.len; ++layer) {
+    DG_Matrix weights_layer = model.w.data[layer];
+    for (u32 i = 0; i < weights_layer.rows; ++i){
+      for (u32 j = 0; j < weights_layer.cols; ++j){
+        MAT_AT(weights_layer, i, j) -= rate * MAT_AT(gradient.w.data[layer], i, j);
+      }
+    }
+
+    DG_Matrix biases_layer = model.b.data[layer];
+    for (u32 i = 0; i < biases_layer.rows; ++i){
+      for (u32 j = 0; j < biases_layer.cols; ++j){
+        MAT_AT(biases_layer, i, j) -= rate * MAT_AT(gradient.b.data[layer], i, j);
+      }
+    }
+
+  }
 
 }
 
@@ -653,11 +679,9 @@ void randomize_model(ML_Model model) {
     matrix_randomize(model.b.data[i]);
   }
 }
+// }}}
 
 void use_model(Arena *a){
-
-  Xor model = xor_alloc(a);
-  Xor gradient = xor_alloc(a);
 
   DG_Matrix inputs = {
     .rows = 4,
@@ -684,9 +708,15 @@ void use_model(Arena *a){
 
   f32 epsilon = 1e-1;
   f32 learning_rate = 1e-1;
-  u32 epochs = 10000;
+  u32 epochs = 1000000;
 
-#if 0
+  f32 x = 1;
+  f32 y = 1;
+
+  Xor model = xor_alloc(a);
+  ML_Model new_xor = alloc_model(a, 2, 2, 1);
+  // {{{
+  Xor gradient = xor_alloc(a);
   matrix_randomize(model.w1);
   matrix_randomize(model.b1);
   matrix_randomize(model.w2);
@@ -700,24 +730,37 @@ void use_model(Arena *a){
   }
   printf("cost = %f\n", cost_xor(model, inputs, outputs));
 
-  MAT_AT(model.a0, 0, 0) = 0;
-  MAT_AT(model.a0, 0, 1) = 0;
+  matrix_copy(new_xor.w.data[0], model.w1);
+  matrix_copy(new_xor.w.data[1], model.w2);
+  matrix_copy(new_xor.b.data[0], model.b1);
+  matrix_copy(new_xor.b.data[1], model.b2);
+
+  MAT_AT(model.a0, 0, 0) = x;
+  MAT_AT(model.a0, 0, 1) = y;
   forward_xor(model);
   printf("value = %f\n", *model.a2.data);
-#endif
+  // }}}
+  // {{{
+  ML_Model new_xor_gradient = alloc_model(a, 2, 2, 1);
+  // randomize_model(new_xor);
 
-  ML_Model new_xor = alloc_model(a, 2, 2, 1);
-  randomize_model(new_xor);
 
   printf("cost = %f\n", cost_model(new_xor, inputs, outputs));
-  // for (u32 i = 0; i < epochs; ++i) {
-  //   finite_diff_xor(model, gradient, epsilon, inputs, outputs);
-  //   learn_xor(model, gradient, learning_rate);
-  // }
+  for (u32 i = 0; i < epochs; ++i) {
+    finite_diff_model(new_xor, new_xor_gradient, epsilon, inputs, outputs);
+    learn_model(new_xor, new_xor_gradient, learning_rate);
+  }
+
   printf("cost = %f\n", cost_model(new_xor, inputs, outputs));
 
+
+
+  MAT_AT(new_xor.a.data[0], 0, 0) = x;
+  MAT_AT(new_xor.a.data[0], 0, 1) = y;
   forward_model(new_xor);
   printf("value = %f\n", *new_xor.a.data[2].data);
+  // }}}
+
 
 }
 
