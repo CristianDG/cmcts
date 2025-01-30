@@ -731,13 +731,17 @@ void use_model(Arena *a){
 
   f32 epsilon = 1e-1;
   f32 learning_rate = 1e-1;
-  u32 epochs = 1000000;
+  u32 epochs = 10000;
 
   f32 x = 1;
   f32 y = 1;
 
   Xor model = xor_alloc(a);
-  ML_Model new_xor = make_model(a, (u32_Slice){.len = 3, .data = (u32[]){2, 2, 1}} );
+  Make_Dynamic_Array_type(u32) sla = {};
+  dynamic_array_push(&sla, 2, a);
+  dynamic_array_push(&sla, 2, a);
+  dynamic_array_push(&sla, 1, a);
+  ML_Model new_xor = make_model(a, DG_REINTERPRET_CAST(u32_Slice, sla));
   ML_Model new_xor_gradient = copy_model_structure(a, new_xor);
   // {{{
   Xor gradient = xor_alloc(a);

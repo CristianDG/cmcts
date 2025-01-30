@@ -44,7 +44,12 @@ typedef u32 b32;
 #define KILOBYTE 1024
 #define MEGABYTE 1048576
 
-#define DG_OFFSET_OF(type, field) ((uintptr)&(((type *) 0)->field))
+#define DG_REINTERPRET_CAST(type, val) \
+  (*((type *)&(val)))
+
+#define DG_OFFSET_OF(type, field) \
+  ((uintptr)&(((type *) 0)->field))
+
 #define DG_DYNAMIC_ACCESS(type, offset) \
   (((void *)(type))+offset)
 
