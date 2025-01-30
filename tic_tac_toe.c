@@ -253,7 +253,6 @@ typedef struct mcts_node {
 } MCTS_Node;
 
 
-// FIXME: para `MINIMISING_PLAYER` essa função está escolhendo errado
 MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, char player) {
   f32 best_score = -INFINITY;
 
@@ -549,7 +548,7 @@ void learn_xor(Xor model, Xor gradient, f32 rate) {
 }
 // }}}
 
-// model {{{
+// model 
 typedef Make_Slice_Type(DG_Matrix) DG_Matrix_Slice;
 typedef struct {
   DG_Matrix_Slice a;
@@ -557,28 +556,25 @@ typedef struct {
   DG_Matrix_Slice b;
 } ML_Model;
 
-// FIXME: parece que ta errado :D
-ML_Model make_model(Arena *a, u32 layers_len, u32 layers[layers_len]){
+typedef Make_Slice_Type(u32) u32_Slice;
+
+ML_Model make_model(Arena *a, u32_Slice layers){
+  DG_ASSERT(layers.len > 0);
+
   ML_Model res = {};
-  make_slice(a, &res.a, layers_len);
-  make_slice(a, &res.w, layers_len - 1);
-  make_slice(a, &res.b, layers_len - 1);
+  make_slice(a, &res.a, layers.len);
+  make_slice(a, &res.w, layers.len - 1);
+  make_slice(a, &res.b, layers.len - 1);
 
 
-  slice_at(res.a, 0) = matrix_alloc(a, 1, layers[0]);
-  for (u32 layer_idx = 1; layer_idx < layers_len; ++layer_idx) {
-    u32 layer_inputs  = layers[layer_idx-1];
-    u32 layer_outputs = layers[layer_idx];
+  SLICE_AT(res.a, 0) = matrix_alloc(a, 1, layers.data[0]);
+  for (u32 layer_idx = 0; layer_idx < layers.len - 1; ++layer_idx) {
+    u32 layer_inputs  = layers.data[layer_idx];
+    u32 layer_outputs = layers.data[layer_idx + 1];
 
-    slice_at(res.a, layer_idx) = matrix_alloc(a, 1, layer_inputs);
-    slice_at(res.w, layer_idx - 1) = matrix_alloc(a,
-      slice_at(res.a, layer_idx - 1).cols,
-      slice_at(res.a, layer_idx).cols
-    );
-    slice_at(res.b, layer_idx - 1) = matrix_alloc(a,
-      slice_at(res.a, layer_idx).rows,
-      slice_at(res.a, layer_idx).cols
-    );
+    res.w.data[layer_idx] = matrix_alloc(a, layer_inputs, layer_outputs);
+    res.b.data[layer_idx] = matrix_alloc(a, 1, layer_outputs);
+    res.a.data[layer_idx + 1] = matrix_alloc(a, 1, layer_outputs);
   }
 
   return res;
@@ -623,19 +619,19 @@ void forward_model(ML_Model model) {
 f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
   DG_ASSERT(inputs.cols == model.a.data[0].cols);
   DG_ASSERT(inputs.rows == outputs.rows);
-  DG_ASSERT(outputs.cols == slice_at(model.a, -1).cols);
+  DG_ASSERT(outputs.cols == SLICE_AT(model.a, -1).cols);
 
   u32 number_of_samples = inputs.rows;
 
   f32 cost = 0;
-  for (u32 i = 0; i < inputs.rows; ++i) {
+  for (u32 i = 0; i < number_of_samples; ++i) {
     for (u32 j = 0; j < inputs.cols; ++j) {
       MAT_AT(model.a.data[0], 0, j) = MAT_AT(inputs, i, j);
     }
 
     forward_model(model);
 
-    DG_Matrix last_layer = slice_at(model.a, -1);
+    DG_Matrix last_layer = SLICE_AT(model.a, -1);
     for (u32 j = 0; j < last_layer.cols; ++j) {
       f32 d = MAT_AT(last_layer, 0, j) - MAT_AT(outputs, i, j);
       cost += d * d;
@@ -649,28 +645,19 @@ void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix
   f32 saved;
   f32 c = cost_model(model, inputs, outputs);
 
-  // TODO: fazer algo com offset_of?
-
-  for (u32 layer = 0; layer < model.w.len; ++layer) {
-    {
-      DG_Matrix weights_layer = model.w.data[layer];
-      for (u32 i = 0; i < weights_layer.rows; ++i) {
-        for (u32 j = 0; j < weights_layer.cols; ++j) {
-          saved = MAT_AT(weights_layer, i, j);
-          MAT_AT(weights_layer, i, j) += epsilon;
-          MAT_AT(gradient.w.data[layer], i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
-          MAT_AT(weights_layer, i, j) = saved;
-        }
-      }
-    }
-    {
-      DG_Matrix biases_layer = model.b.data[layer];
-      for (u32 i = 0; i < biases_layer.rows; ++i) {
-        for (u32 j = 0; j < biases_layer.cols; ++j) {
-          saved = MAT_AT(biases_layer, i, j);
-          MAT_AT(biases_layer, i, j) += epsilon;
-          MAT_AT(gradient.b.data[layer], i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
-          MAT_AT(biases_layer, i, j) = saved;
+  u32 number_of_layers = model.w.len;
+  for (u32 layer = 0; layer < number_of_layers; ++layer) {
+    for (u32 stride_idx = 0; stride_idx  < 2; ++stride_idx ) {
+      u32 stride = (u32[2]){ DG_OFFSET_OF(ML_Model, w), DG_OFFSET_OF(ML_Model, b) }[stride_idx];
+      
+      DG_Matrix model_layer    = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&model   , stride))->data[layer];
+      DG_Matrix gradient_layer = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&gradient, stride))->data[layer];
+      for (u32 i = 0; i < model_layer.rows; ++i) {
+        for (u32 j = 0; j < model_layer.cols; ++j) {
+          saved = MAT_AT(model_layer, i, j);
+          MAT_AT(model_layer, i, j) += epsilon;
+          MAT_AT(gradient_layer, i, j) = (cost_model(model, inputs, outputs) - c)/epsilon;
+          MAT_AT(model_layer, i, j) = saved;
         }
       }
     }
@@ -679,21 +666,20 @@ void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix
 
 void learn_model(ML_Model model, ML_Model gradient, f32 rate) {
 
-  for (u32 layer = 0; layer < model.w.len; ++layer) {
-    DG_Matrix weights_layer = model.w.data[layer];
-    for (u32 i = 0; i < weights_layer.rows; ++i){
-      for (u32 j = 0; j < weights_layer.cols; ++j){
-        MAT_AT(weights_layer, i, j) -= rate * MAT_AT(gradient.w.data[layer], i, j);
+  u32 number_of_layers = model.w.len;
+  for (u32 layer = 0; layer < number_of_layers; ++layer) {
+    for (u32 stride_idx = 0; stride_idx  < 2; ++stride_idx ) {
+      u32 stride = (u32[2]){ DG_OFFSET_OF(ML_Model, w), DG_OFFSET_OF(ML_Model, b) }[stride_idx];
+
+      DG_Matrix model_layer    = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&model   , stride))->data[layer];
+      DG_Matrix gradient_layer = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&gradient, stride))->data[layer];
+
+      for (u32 i = 0; i < model_layer.rows; ++i){
+        for (u32 j = 0; j < model_layer.cols; ++j){
+          MAT_AT(model_layer, i, j) -= rate * MAT_AT(gradient_layer, i, j);
+        }
       }
     }
-
-    DG_Matrix biases_layer = model.b.data[layer];
-    for (u32 i = 0; i < biases_layer.rows; ++i){
-      for (u32 j = 0; j < biases_layer.cols; ++j){
-        MAT_AT(biases_layer, i, j) -= rate * MAT_AT(gradient.b.data[layer], i, j);
-      }
-    }
-
   }
 
 }
@@ -706,7 +692,17 @@ void randomize_model(ML_Model model) {
     matrix_randomize(model.b.data[i]);
   }
 }
-// }}}
+
+ML_Model copy_model_structure(Arena *a, ML_Model model) {
+  u32_Slice layers;
+  make_slice(a, &layers, model.a.len);
+  for (u32 i = 0; i < model.a.len; ++i) {
+    layers.data[i] = model.a.data[i].cols;
+  }
+
+  return make_model(a, layers);
+}
+
 
 void use_model(Arena *a){
 
@@ -735,24 +731,20 @@ void use_model(Arena *a){
 
   f32 epsilon = 1e-1;
   f32 learning_rate = 1e-1;
-  u32 epochs = 100000;
+  u32 epochs = 1000000;
 
   f32 x = 1;
   f32 y = 1;
 
   Xor model = xor_alloc(a);
-  ML_Model new_xor = make_model(a, 3, (u32[]){2, 2, 1});
+  ML_Model new_xor = make_model(a, (u32_Slice){.len = 3, .data = (u32[]){2, 2, 1}} );
+  ML_Model new_xor_gradient = copy_model_structure(a, new_xor);
   // {{{
   Xor gradient = xor_alloc(a);
   matrix_randomize(model.w1);
   matrix_randomize(model.b1);
   matrix_randomize(model.w2);
   matrix_randomize(model.b2);
-
-  matrix_copy(new_xor.w.data[0], model.w1);
-  matrix_copy(new_xor.w.data[1], model.w2);
-  matrix_copy(new_xor.b.data[0], model.b1);
-  matrix_copy(new_xor.b.data[1], model.b2);
 
   printf("cost = %f\n", cost_xor(model, inputs, outputs));
   for (u32 i = 0; i < epochs; ++i) {
@@ -767,18 +759,15 @@ void use_model(Arena *a){
   printf("value = %f\n", *model.a2.data);
   // }}}
   // {{{
-  ML_Model new_xor_gradient = alloc_model(a, 2, 2, 1);
-  // randomize_model(new_xor);
 
+  randomize_model(new_xor);
 
   printf("cost = %f\n", cost_model(new_xor, inputs, outputs));
   for (u32 i = 0; i < epochs; ++i) {
     finite_diff_model(new_xor, new_xor_gradient, epsilon, inputs, outputs);
     learn_model(new_xor, new_xor_gradient, learning_rate);
   }
-
   printf("cost = %f\n", cost_model(new_xor, inputs, outputs));
-
 
 
   MAT_AT(new_xor.a.data[0], 0, 0) = x;

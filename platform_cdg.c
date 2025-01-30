@@ -45,6 +45,8 @@ typedef u32 b32;
 #define MEGABYTE 1048576
 
 #define DG_OFFSET_OF(type, field) ((uintptr)&(((type *) 0)->field))
+#define DG_DYNAMIC_ACCESS(type, offset) \
+  (((void *)(type))+offset)
 
 #endif
 // }}}
@@ -239,8 +241,8 @@ void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
   *slice = res;
 }
 
-#define slice_at(slice, idx) \
-  (slice.data[idx < 0 ? slice.len - idx : idx])
+#define SLICE_AT(slice, idx) \
+  (slice.data[idx < 0 ? slice.len + idx : idx])
 
 #endif // CDG_CONTAINER_C
 // }}}
