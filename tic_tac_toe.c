@@ -245,7 +245,7 @@ typedef struct mcts_node {
   // struct mcts_node *first_child;
 
   // struct mcts_node *sibling;
-  Dynamic_Array(struct mcts_node) dyn_children;
+  Make_Dynamic_Array_type(struct mcts_node) dyn_children;
   Game_State state;
   Action action_taken;
   u64 visits;
@@ -260,7 +260,7 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, char player) {
   MCTS_Node *best_child = 0;
   Temorary_Arena_Memory tmp = temp_arena_memory_begin(node->backing_arena);
   {
-    Dynamic_Array(MCTS_Node*) best_children = {};
+    Make_Dynamic_Array_type(MCTS_Node*) best_children = {};
     for (i32 i = 0; i < node->dyn_children.len; i++) {
       MCTS_Node *child = &node->dyn_children.data[i];
       f32 score = 0;
@@ -410,7 +410,6 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
 
 // softmax {{{
 
-
 void apply_sigmoid(DG_Matrix m) {
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
@@ -551,12 +550,39 @@ void learn_xor(Xor model, Xor gradient, f32 rate) {
 // }}}
 
 // model {{{
-typedef Slice(DG_Matrix) DG_Matrix_Slice ;
+typedef Make_Slice_Type(DG_Matrix) DG_Matrix_Slice;
 typedef struct {
   DG_Matrix_Slice a;
   DG_Matrix_Slice w;
   DG_Matrix_Slice b;
 } ML_Model;
+
+// FIXME: parece que ta errado :D
+ML_Model make_model(Arena *a, u32 layers_len, u32 layers[layers_len]){
+  ML_Model res = {};
+  make_slice(a, &res.a, layers_len);
+  make_slice(a, &res.w, layers_len - 1);
+  make_slice(a, &res.b, layers_len - 1);
+
+
+  slice_at(res.a, 0) = matrix_alloc(a, 1, layers[0]);
+  for (u32 layer_idx = 1; layer_idx < layers_len; ++layer_idx) {
+    u32 layer_inputs  = layers[layer_idx-1];
+    u32 layer_outputs = layers[layer_idx];
+
+    slice_at(res.a, layer_idx) = matrix_alloc(a, 1, layer_inputs);
+    slice_at(res.w, layer_idx - 1) = matrix_alloc(a,
+      slice_at(res.a, layer_idx - 1).cols,
+      slice_at(res.a, layer_idx).cols
+    );
+    slice_at(res.b, layer_idx - 1) = matrix_alloc(a,
+      slice_at(res.a, layer_idx).rows,
+      slice_at(res.a, layer_idx).cols
+    );
+  }
+
+  return res;
+}
 
 ML_Model alloc_model(Arena *a, u32 nodes_input, u32 nodes_middle, u32 nodes_output){
 
@@ -597,7 +623,7 @@ void forward_model(ML_Model model) {
 f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
   DG_ASSERT(inputs.cols == model.a.data[0].cols);
   DG_ASSERT(inputs.rows == outputs.rows);
-  DG_ASSERT(outputs.cols == model.a.data[2].cols);
+  DG_ASSERT(outputs.cols == slice_at(model.a, -1).cols);
 
   u32 number_of_samples = inputs.rows;
 
@@ -609,8 +635,9 @@ f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
 
     forward_model(model);
 
-    for (u32 j = 0; j < model.a.data[2].cols; ++j) {
-      f32 d = MAT_AT(model.a.data[2], 0, j) - MAT_AT(outputs, i, j);
+    DG_Matrix last_layer = slice_at(model.a, -1);
+    for (u32 j = 0; j < last_layer.cols; ++j) {
+      f32 d = MAT_AT(last_layer, 0, j) - MAT_AT(outputs, i, j);
       cost += d * d;
     }
   }
@@ -708,13 +735,13 @@ void use_model(Arena *a){
 
   f32 epsilon = 1e-1;
   f32 learning_rate = 1e-1;
-  u32 epochs = 1000000;
+  u32 epochs = 100000;
 
   f32 x = 1;
   f32 y = 1;
 
   Xor model = xor_alloc(a);
-  ML_Model new_xor = alloc_model(a, 2, 2, 1);
+  ML_Model new_xor = make_model(a, 3, (u32[]){2, 2, 1});
   // {{{
   Xor gradient = xor_alloc(a);
   matrix_randomize(model.w1);
@@ -722,6 +749,10 @@ void use_model(Arena *a){
   matrix_randomize(model.w2);
   matrix_randomize(model.b2);
 
+  matrix_copy(new_xor.w.data[0], model.w1);
+  matrix_copy(new_xor.w.data[1], model.w2);
+  matrix_copy(new_xor.b.data[0], model.b1);
+  matrix_copy(new_xor.b.data[1], model.b2);
 
   printf("cost = %f\n", cost_xor(model, inputs, outputs));
   for (u32 i = 0; i < epochs; ++i) {
@@ -729,11 +760,6 @@ void use_model(Arena *a){
     learn_xor(model, gradient, learning_rate);
   }
   printf("cost = %f\n", cost_xor(model, inputs, outputs));
-
-  matrix_copy(new_xor.w.data[0], model.w1);
-  matrix_copy(new_xor.w.data[1], model.w2);
-  matrix_copy(new_xor.b.data[0], model.b1);
-  matrix_copy(new_xor.b.data[1], model.b2);
 
   MAT_AT(model.a0, 0, 0) = x;
   MAT_AT(model.a0, 0, 1) = y;
@@ -785,6 +811,7 @@ Action receive_stdin_input(Game_State *s) {
 // }}}
 
 int tic_tac_toe_main() {
+
   srand(time(0));
   Arena arena = arena_init_malloc(20 * MEGABYTE);
 

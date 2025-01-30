@@ -28,6 +28,8 @@ typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef uintptr_t uintptr;
+typedef intptr_t intptr;
 
 typedef int8_t  i8;
 typedef int16_t i16;
@@ -42,6 +44,8 @@ typedef u32 b32;
 #define KILOBYTE 1024
 #define MEGABYTE 1048576
 
+#define DG_OFFSET_OF(type, field) ((uintptr)&(((type *) 0)->field))
+
 #endif
 // }}}
 
@@ -54,6 +58,10 @@ typedef u32 b32;
 #include <string.h> // for memset
 
 #define DEFAULT_ALIGNMENT 16
+
+// TODO: WIP
+typedef struct {
+} Growing_Arena;
 
 typedef struct {
   u8 *data;
@@ -168,14 +176,14 @@ typedef struct dynamic_array_header {
   u32 cap;
 } Dynamic_Array_Header;
 
-#define Dynamic_Array(type) \
+#define Make_Dynamic_Array_type(type) \
 struct { \
+  type *data; \
   u32 len; \
   u32 cap; \
-  type *data; \
 }
 
-typedef Dynamic_Array(void) _Any_Dynamic_Array;
+typedef Make_Dynamic_Array_type(void) _Any_Dynamic_Array;
 
 void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
   _Any_Dynamic_Array replica = {};
@@ -208,13 +216,13 @@ void _dynamic_array_clear(_Any_Dynamic_Array *arr) {
 
 #define dynamic_array_clear(arr) _dynamic_array_clear((_Any_Dynamic_Array *) (arr))
 
-#define Slice(type) \
+#define Make_Slice_Type(type) \
 struct { \
-  u64 len; \
   type *data; \
+  u32 len; \
 }
 
-typedef Slice(void) _Any_Slice;
+typedef Make_Slice_Type(void) _Any_Slice;
 
 #define make_slice(arena, slice, len) dg_make_slice(arena, (_Any_Slice *)slice, len, sizeof(*(slice)->data))
 
@@ -230,6 +238,9 @@ void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
 
   *slice = res;
 }
+
+#define slice_at(slice, idx) \
+  (slice.data[idx < 0 ? slice.len - idx : idx])
 
 #endif // CDG_CONTAINER_C
 // }}}
