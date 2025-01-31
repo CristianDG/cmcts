@@ -18,9 +18,16 @@
 #define DG_ASSERT_MSG(check, msg) assert((check) && msg)
 #endif // DG_ASSERT
 
+#define DG_STATEMENT(x) do { x } while (0)
+
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
+#define CLAMP_TOP MIN
+#define CLAMP_BOTTOM MAX
+
+// TODO: olhar se funciona
 #define STR(x) #x
+#define GLUE(a,b) a##b
 
 #define is_power_of_two(x) ((x != 0) && ((x & (x - 1)) == 0))
 
@@ -209,13 +216,13 @@ void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
   memcpy(arr, &replica, sizeof(replica));
 }
 
-#define dynamic_array_push(arr, item, arena) \
-  do { \
+#define dynamic_array_push(arr, item, arena) DG_STATEMENT \
+  ( \
     if ((arr)->len >= (arr)->cap) { \
       dynamic_array_grow((_Any_Dynamic_Array*)(arr), (arena), sizeof(*(arr)->data)); /* NOLINT */\
     }\
     (arr)->data[(arr)->len++] = (item); \
-  } while (0)
+  )
 
 void _dynamic_array_clear(_Any_Dynamic_Array *arr) {
   arr->len = 0;

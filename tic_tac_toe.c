@@ -548,7 +548,7 @@ void learn_xor(Xor model, Xor gradient, f32 rate) {
 }
 // }}}
 
-// model 
+// model  {{{
 typedef Make_Slice_Type(DG_Matrix) DG_Matrix_Slice;
 typedef struct {
   DG_Matrix_Slice a;
@@ -703,6 +703,7 @@ ML_Model copy_model_structure(Arena *a, ML_Model model) {
   return make_model(a, layers);
 }
 
+// }}}
 
 void use_model(Arena *a){
 
@@ -731,7 +732,7 @@ void use_model(Arena *a){
 
   f32 epsilon = 1e-1;
   f32 learning_rate = 1e-1;
-  u32 epochs = 10000;
+  u32 epochs = 100000;
 
   f32 x = 1;
   f32 y = 1;
@@ -791,7 +792,7 @@ Action receive_stdin_input(Game_State *s) {
   printf("%c, provide a number between 1 and 9: ", s->player);
   int pos;
 
-  int res = scanf("%d", &pos);
+  int res = scanf_s("%d", &pos);
   fflush(stdin);
 
   if (!res) exit(1);
