@@ -1,10 +1,7 @@
 #define DG_ARENA_DEBUG
 #include "cdg_base.c"
 
-#include <assert.h>
-#include <time.h>
-#include <stdio.h>
-#include <math.h>
+
 
 typedef struct {
   char board[9];
@@ -22,15 +19,10 @@ typedef struct Action_List {
   uint8_t size;
 } Action_List;
 
-// TODO: arena allocator
-
-/* NOTE: traversing the board:
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      char item = s->board[j + i*3];
-    }
-  }
-*/
+#include <assert.h>
+#include <time.h>
+#include <stdio.h>
+#include <math.h>
 
 char terminated(Game_State *s) {
 
@@ -106,22 +98,6 @@ void simulate(Game_State *s, Action a) {
 
 }
 
-// static int debug_iterations = 0;
-
-// static int iterations;
-void render_ascii(Game_State *s) {
-  // printf("------\n");
-  system("clear");
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      char item = s->board[j + i*3];
-      printf("%c ", item == 0 ? '-' : item);
-    }
-    printf("\n");
-  }
-  // printf("iterations: %d\n", debug_iterations);
-  // debug_iterations = 0;
-}
 
 #define MAXIMISING_PLAYER 'X'
 #define MINIMISING_PLAYER 'O'
@@ -792,7 +768,7 @@ Action receive_stdin_input(Game_State *s) {
   printf("%c, provide a number between 1 and 9: ", s->player);
   int pos;
 
-  int res = scanf_s("%d", &pos);
+  int res = scanf("%d", &pos);
   fflush(stdin);
 
   if (!res) exit(1);
@@ -804,44 +780,3 @@ Action receive_stdin_input(Game_State *s) {
 }
 // }}}
 
-int tic_tac_toe_main() {
-
-  srand(time(0));
-  Arena arena = arena_init_malloc(20 * MEGABYTE);
-
-  use_model(&arena);
-  return 0;
-
-
-  Game_State game_state = {
-    .player = 'O'
-  };
-
-
-  char winner;
-  while (!game_state.game_over) {
-    render_ascii(&game_state);
-    Action action = {};
-    // printf("current player: %c\n", game_state.player);
-    if (game_state.player == 'O') {
-      // action = minimax(&game_state);
-      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
-      // action = receive_stdin_input(&game_state);
-    } else {
-      // action = minimax(&game_state);
-      action = monte_carlo_tree_search(arena, &game_state, 1000000, sqrt(2));
-      // action = receive_stdin_input(&game_state);
-    }
-    simulate(&game_state, action);
-    winner = terminated(&game_state);
-    if (winner) game_state.game_over = true;
-  }
-  render_ascii(&game_state);
-  if (winner == '-') {
-    printf("its a tie!\n");
-  } else {
-    printf("winner is %c!\n", winner);
-  }
-
-  return 0;
-}

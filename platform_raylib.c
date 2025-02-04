@@ -22,9 +22,6 @@ void draw_board(Game_State *state) {
 
 int main() {
 
-  tic_tac_toe_main();
-  return 0;
-
   srand(time(0));
 
   Game_State game_state = {};
