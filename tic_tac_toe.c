@@ -1,5 +1,5 @@
 #define DG_ARENA_DEBUG
-#include "platform_cdg.c"
+#include "cdg_base.c"
 
 #include <assert.h>
 #include <time.h>
