@@ -67,7 +67,7 @@ char terminated(Game_State *s) {
 // }
 
 Action_List possible_actions(Game_State *s){
-  Action_List res = {};
+  Action_List res = {0};
 
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
@@ -116,11 +116,11 @@ Minimax_Action maximax(Game_State s, Action a, int8_t alpha, int8_t beta);
 Minimax_Action minimin(Game_State s, Action a, int8_t alpha, int8_t beta);
 
 Action minimax(Game_State *s) {
-  Minimax_Action res = {};
+  Minimax_Action res = {0};
   if (s->player == MAXIMISING_PLAYER) {
-    res = maximax(*s, (Action){}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
+    res = maximax(*s, (Action){0}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
   } else {
-    res = minimin(*s, (Action){}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
+    res = minimin(*s, (Action){0}, MINIMAX_MIN_VALUE, MINIMAX_MAX_VALUE);
   }
   return res.action;
 }
@@ -235,7 +235,7 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, char player) {
   MCTS_Node *best_child = 0;
   Temorary_Arena_Memory tmp = temp_arena_memory_begin(node->backing_arena);
   {
-    Make_Dynamic_Array_type(MCTS_Node*) best_children = {};
+    Make_Dynamic_Array_type(MCTS_Node*) best_children = {0};
     for (i32 i = 0; i < node->dyn_children.len; i++) {
       MCTS_Node *child = &node->dyn_children.data[i];
       f32 score = 0;
@@ -537,7 +537,7 @@ typedef Make_Slice_Type(u32) u32_Slice;
 ML_Model make_model(Arena *a, u32_Slice layers){
   DG_ASSERT(layers.len > 0);
 
-  ML_Model res = {};
+  ML_Model res = {0};
   make_slice(a, &res.a, layers.len);
   make_slice(a, &res.w, layers.len - 1);
   make_slice(a, &res.b, layers.len - 1);
@@ -558,7 +558,7 @@ ML_Model make_model(Arena *a, u32_Slice layers){
 
 ML_Model alloc_model(Arena *a, u32 nodes_input, u32 nodes_middle, u32 nodes_output){
 
-  ML_Model res = {};
+  ML_Model res = {0};
 
   make_slice(a, &res.a, 3);
   make_slice(a, &res.w, 2);
@@ -714,7 +714,7 @@ void use_model(Arena *a){
   f32 y = 1;
 
   Xor model = xor_alloc(a);
-  Make_Dynamic_Array_type(u32) sla = {};
+  Make_Dynamic_Array_type(u32) sla = {0};
   dynamic_array_push(&sla, 2, a);
   dynamic_array_push(&sla, 2, a);
   dynamic_array_push(&sla, 1, a);

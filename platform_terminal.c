@@ -28,7 +28,7 @@ int main() {
   char winner;
   while (!game_state.game_over) {
     terminal_render(&game_state);
-    Action action = {};
+    Action action = {0};
     // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);

@@ -200,7 +200,7 @@ struct { \
 typedef Make_Dynamic_Array_type(void) _Any_Dynamic_Array;
 
 void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
-  _Any_Dynamic_Array replica = {};
+  _Any_Dynamic_Array replica = {0};
   memcpy(&replica, arr, sizeof(replica));
 
   replica.cap = replica.cap ? replica.cap : 1;
@@ -241,7 +241,7 @@ typedef Make_Slice_Type(void) _Any_Slice;
 #define make_slice(arena, slice, len) dg_make_slice(arena, (_Any_Slice *)slice, len, sizeof(*(slice)->data))
 
 void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
-  _Any_Slice res = {};
+  _Any_Slice res = {0};
 
   void *data = arena_alloc(a, len * item_size);
 
