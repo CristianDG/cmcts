@@ -2,6 +2,7 @@
 #ifndef CDG_TYPES_H
 #define CDG_TYPES_H
 
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -11,15 +12,13 @@
  */
 
 
-#ifndef DG_ASSERT
-// TODO: trocar pelo meu assert
-#include <assert.h>
-#define DG_ASSERT assert
-#define DG_ASSERT_MSG(check, msg) assert((check) && msg)
-#endif // DG_ASSERT
-
 #define DG_STATEMENT(x) do { x } while (0)
 
+#ifndef DG_CRASH
+#define DG_CRASH() (*((volatile int *)0) = 69)
+#endif // DG_CRASH
+
+#define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
 #define CLAMP_TOP MIN
@@ -28,6 +27,29 @@
 // TODO: olhar se funciona
 #define STR(x) #x
 #define GLUE(a,b) a##b
+
+#ifndef DG_ASSERT
+#if defined(DG_ASSERT_EXPR)
+// NOTE: esse assert funciona como expressão: bool assert(bool)
+
+#define DG_ASSERT(exp) ( \
+  (exp) \
+    ? (true) \
+    : (DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)), DG_CRASH(), false) \
+)
+
+#else // !defined(DG_ASSERT_EXPR)
+
+#define DG_ASSERT(exp) \
+do { \
+  if ((exp) == false) { \
+    DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)); \
+    DG_CRASH(); \
+  } \
+} while (false)
+
+#endif // DG_ASSERT_EXPR
+#endif // DG_ASSERT
 
 #define is_power_of_two(x) ((x != 0) && ((x & (x - 1)) == 0))
 
@@ -60,6 +82,27 @@ typedef u32 b32;
 #define DG_DYNAMIC_ACCESS(type, offset) \
   (((void *)(type))+offset)
 
+
+#ifndef DG_MEMSET
+#include <string.h>
+#define DG_MEMSET memset
+#endif // DG_MEMSET
+
+#ifndef DG_MEMCPY
+#include <string.h>
+#define DG_MEMCPY memcpy
+#endif // DG_MEMCPY
+
+#ifndef DG_LOG_ERROR
+#include <stdio.h>
+#define DG_LOG_ERROR(args...) fprintf(stderr, args)
+#endif // DG_LOG_ERROR
+
+#ifndef DG_LOG
+#include <stdio.h>
+#define DG_LOG(args...) fprintf(stdout, args)
+#endif // DG_LOG
+
 #endif
 // }}}
 
@@ -67,9 +110,8 @@ typedef u32 b32;
 #ifndef CDG_ALLOC_C
 #define CDG_ALLOC_C
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h> // for memset
+#include <stddef.h>
+// #include <string.h> // for memset
 
 #define DEFAULT_ALIGNMENT 16
 
@@ -95,9 +137,7 @@ typedef struct {
   u32 cursor;
 } Temorary_Arena_Memory;
 
-Arena arena_init_malloc(u64 size) {
-  void *data = malloc(size);
-
+Arena arena_init_buffer(u8 *data, size_t size) {
   return (Arena){
     .data = data,
     .size = size,
@@ -134,7 +174,7 @@ void *_arena_alloc(Arena *arena, size_t size, size_t alignment) {
 
   void *ptr = (void *)arena->data + offset;
   arena->cursor = offset + size;
-  return memset(ptr, 0, size);
+  return DG_MEMSET(ptr, 0, size);
 }
 
 // TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
@@ -142,7 +182,7 @@ void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *f
   // TODO: registrar onde foram todas as alocações
   void *ptr = _arena_alloc(arena, size, alignment);
   if (ptr == 0) {
-    fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
+    DG_LOG_ERROR("%s:%d Could not allocate %zu bytes\n", file, line, size);
   }
   return ptr;
 }
@@ -171,10 +211,6 @@ void arena_clear(Arena *arena) {
   arena->cursor = 0;
 }
 
-void arena_release(Arena arena) {
-  free(arena.data);
-}
-
 #endif
 // }}}
 
@@ -201,7 +237,7 @@ typedef Make_Dynamic_Array_type(void) _Any_Dynamic_Array;
 
 void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
   _Any_Dynamic_Array replica = {0};
-  memcpy(&replica, arr, sizeof(replica));
+  DG_MEMCPY(&replica, arr, sizeof(replica));
 
   replica.cap = replica.cap ? replica.cap : 1;
   void *data = arena_alloc(a, 2 * item_size * replica.cap);
@@ -209,11 +245,11 @@ void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
 
   replica.cap *= 2;
   if (replica.len) {
-    memcpy(data, replica.data, item_size*replica.len);
+    DG_MEMCPY(data, replica.data, item_size*replica.len);
   }
   replica.data = data;
 
-  memcpy(arr, &replica, sizeof(replica));
+  DG_MEMCPY(arr, &replica, sizeof(replica));
 }
 
 #define dynamic_array_push(arr, item, arena) DG_STATEMENT \
@@ -284,7 +320,7 @@ void matrix_copy(DG_Matrix dst, DG_Matrix src){
   DG_ASSERT(src.rows == dst.rows);
   DG_ASSERT(src.cols == dst.cols);
 
-  memcpy(dst.data, src.data, sizeof(*src.data) * src.rows * src.cols);
+  DG_MEMCPY(dst.data, src.data, sizeof(*src.data) * src.rows * src.cols);
 }
 
 // NOTE: não sei como me sinto passando um valor por cópia mesmo sabendo que ele vai ser modificado
@@ -330,15 +366,15 @@ DG_Matrix matrix_dot(Arena *arena, DG_Matrix a, DG_Matrix b) {
 }
 
 void dg_matrix_print(DG_Matrix m, char *name) {
-  printf("%s = [ \n", name);
+  DG_LOG("%s = [ \n", name);
   for(u32 r = 0; r < m.rows; ++r) {
-    printf("    ");
+    DG_LOG("    ");
     for(u32 c = 0; c < m.cols; ++c) {
-      printf(" %f", MAT_AT(m, r, c));
+      DG_LOG(" %f", MAT_AT(m, r, c));
     }
-    printf("\n");
+    DG_LOG("\n");
   }
-  printf("]\n");
+  DG_LOG("]\n");
 }
 #define matrix_print(x) dg_matrix_print(x, STR(x))
 
@@ -351,6 +387,8 @@ void dg_matrix_print(DG_Matrix m, char *name) {
 #define CDG_MATH_H
 
 #include <math.h>
+#include <stdlib.h>
+
 f32 sigmoidf(f32 x) {
   return 1.f / (1.f + expf(-x));
 }

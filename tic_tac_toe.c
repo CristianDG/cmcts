@@ -1,8 +1,6 @@
 #define DG_ARENA_DEBUG
 #include "cdg_base.c"
 
-
-
 typedef struct {
   char board[9];
   char player;
@@ -256,7 +254,7 @@ MCTS_Node *uct_select(MCTS_Node *node, f32 exploration_constant, char player) {
       }
     }
     assert(best_children.len > 0);
-    u32 idx = rand() % best_children.len;
+    u32 idx = (u32)rand() % best_children.len;
     // TODO: random selection
     best_child = best_children.data[idx];
   }
