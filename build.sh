@@ -24,7 +24,7 @@ fi
 
 if [[ $ON_RPI == 1 ]]; then
   flags+=" -l raylib_rpi"
-else  
+else
   flags+=" -l raylib"
 fi
 
