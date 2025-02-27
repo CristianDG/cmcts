@@ -18,7 +18,7 @@ flags+=" -g"
 
 if [[ $ON_WINDOWS == 1 ]]; then
   flags+=" -lmsvcrt -lOpenGL32 -lGdi32 -lWinMM -lkernel32 -lshell32 -lUser32 -Xlinker /NODEFAULTLIB:libcmt"
-else  
+else
   flags+=" -lm -ldl -pthread"
 fi
 
