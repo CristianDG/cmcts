@@ -1,4 +1,5 @@
 #define DG_ARENA_DEBUG
+#define DG_ALLOC_IMPLEMENTATION
 #include "cdg_base.c"
 
 typedef struct {

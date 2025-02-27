@@ -7,7 +7,7 @@ ON_RPI=0
 ON_WINDOWS=0
 
 if [[ $ON_RPI == 1 ]]; then
-  $ON_WINDOWS=0
+  ON_WINDOWS=0
 fi
 
 flags=""

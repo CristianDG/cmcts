@@ -28,8 +28,9 @@
 #define STR(x) #x
 #define GLUE(a,b) a##b
 
-#ifndef DG_ASSERT
-#if defined(DG_ASSERT_EXPR)
+#if !defined(DG_ASSERT) // {{{
+
+#if defined(DG_USE_ASSERT_AS_EXPR) // {{{
 // NOTE: esse assert funciona como expressão: bool assert(bool)
 
 #define DG_ASSERT(exp) ( \
@@ -37,19 +38,19 @@
     ? (true) \
     : (DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)), DG_CRASH(), false) \
 )
-
-#else // !defined(DG_ASSERT_EXPR)
+// }}}
+#else // !defined(DG_USE_ASSERT_AS_EXPR) {{{
 
 #define DG_ASSERT(exp) \
-do { \
+DG_STATEMENT({ \
   if ((exp) == false) { \
     DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)); \
     DG_CRASH(); \
   } \
-} while (false)
+})
 
-#endif // DG_ASSERT_EXPR
-#endif // DG_ASSERT
+#endif // DG_USE_ASSERT_AS_EXPR }}}
+#endif // DG_ASSERT }}}
 
 #define is_power_of_two(x) ((x != 0) && ((x & (x - 1)) == 0))
 
@@ -137,7 +138,31 @@ typedef struct {
   u32 cursor;
 } Temorary_Arena_Memory;
 
-Arena arena_init_buffer(u8 *data, size_t size) {
+
+Arena arena_init_buffer(u8 *data, size_t size);
+uintptr_t align_forward(uintptr_t ptr, size_t alignment);
+
+void *_arena_alloc(Arena *arena, size_t size, size_t alignment);
+void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line);
+
+Temorary_Arena_Memory temp_arena_memory_begin(Arena *a);
+void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem);
+
+void arena_clear(Arena *arena);
+
+#if defined(DG_ARENA_DEBUG)
+#define arena_alloc(arena, size) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, __FILE__, __LINE__)
+#define arena_alloc_pass_loc(arena, size, file, line) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, file, line)
+#else
+#define arena_alloc(arena, size) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
+#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
+#endif //DG_ARENA_DEBUG
+
+
+#ifdef DG_ALLOC_IMPLEMENTATION // {{{
+
+Arena arena_init_buffer(u8 *data, size_t size)
+{
   return (Arena){
     .data = data,
     .size = size,
@@ -145,7 +170,8 @@ Arena arena_init_buffer(u8 *data, size_t size) {
 }
 
 // implementation from https://dylanfalconer.com/articles/the-arena-custom-memory-allocators
-uintptr_t align_forward(uintptr_t ptr, size_t alignment) {
+uintptr_t align_forward(uintptr_t ptr, size_t alignment)
+{
     uintptr_t p, a, modulo;
     if (!is_power_of_two(alignment)) {
         return 0;
@@ -162,7 +188,8 @@ uintptr_t align_forward(uintptr_t ptr, size_t alignment) {
     return p;
 }
 
-void *_arena_alloc(Arena *arena, size_t size, size_t alignment) {
+void *_arena_alloc(Arena *arena, size_t size, size_t alignment)
+{
   uintptr_t curr_ptr = (uintptr_t)arena->data + (uintptr_t)arena->cursor;
   uintptr_t offset = align_forward(curr_ptr, alignment);
   offset -= (uintptr_t)arena->data;
@@ -178,7 +205,8 @@ void *_arena_alloc(Arena *arena, size_t size, size_t alignment) {
 }
 
 // TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
-void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line) {
+void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line)
+{
   // TODO: registrar onde foram todas as alocações
   void *ptr = _arena_alloc(arena, size, alignment);
   if (ptr == 0) {
@@ -187,30 +215,26 @@ void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *f
   return ptr;
 }
 
-Temorary_Arena_Memory temp_arena_memory_begin(Arena *a){
+Temorary_Arena_Memory temp_arena_memory_begin(Arena *a)
+{
   return (Temorary_Arena_Memory) {
     .arena = a,
     .cursor = a->cursor,
   };
 }
-void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem){
+
+void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem)
+{
   tmp_mem.arena->cursor = tmp_mem.cursor;
 }
 
-
-#if defined(DG_ARENA_DEBUG)
-#define arena_alloc(arena, size) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, __FILE__, __LINE__)
-#define arena_alloc_pass_loc(arena, size, file, line) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, file, line)
-#else
-#define arena_alloc(arena, size) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
-#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
-#endif //DG_ARENA_DEBUG
-
 // TODO:
-void arena_clear(Arena *arena) {
+void arena_clear(Arena *arena)
+{
   arena->cursor = 0;
 }
 
+#endif // DG_ALLOC_IMPLEMENTATION }}}
 #endif
 // }}}
 
