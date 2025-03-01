@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-if [ -e ./.env ]; then
+if [ -f ./.env ]; then
   source ./.env
 else
   echo ".env not found"
