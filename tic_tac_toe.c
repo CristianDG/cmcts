@@ -20,7 +20,6 @@ typedef struct Action_List {
 } Action_List;
 
 #include <assert.h>
-#include <time.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -763,12 +762,20 @@ void use_model(Arena *a){
 
 // }}}
 
+// TODO: remover
+#if defined(_MSC_VER)
+#define _scanf scanf_s
+#else
+#define _scanf scanf
+#endif
+
+
 // human input {{{
 Action receive_stdin_input(Game_State *s) {
   printf("%c, provide a number between 1 and 9: ", s->player);
   int pos;
 
-  int res = scanf("%d", &pos);
+  int res = _scanf("%d", &pos);
   fflush(stdin);
 
   if (!res) exit(1);

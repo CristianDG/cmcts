@@ -1,4 +1,5 @@
 #include "tic_tac_toe.c"
+#include <time.h>
 
 void terminal_render(Game_State *s) {
   system("clear");

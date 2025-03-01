@@ -3,6 +3,7 @@
 #define CDG_TYPES_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 
 /* TODO:
@@ -35,8 +36,11 @@ typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+
 typedef uintptr_t uintptr;
 typedef intptr_t intptr;
+
+typedef size_t usize;
 
 typedef int8_t  i8;
 typedef int16_t i16;
@@ -84,11 +88,11 @@ typedef struct {
   u32 cursor;
 } Arena;
 
-// TODO: WIP
+// TODO: adicionar uma abstração que faça uso
 typedef struct {
   void *(*alloc)(u64);
   void (*free)(void *);
-} CDG_Allocator;
+} DG_Allocator;
 
 typedef struct {
   Arena *arena;
@@ -183,18 +187,19 @@ void arena_release(Arena arena) {
 #define CDG_CONTAINER_C
 // TODO: include arena.c
 
+// NOTE: implementation from https://nullprogram.com/blog/2023/10/05/
 
 // TODO: usar ou remover
 typedef struct dynamic_array_header {
-  u32 len;
-  u32 cap;
+  i32 len;
+  i32 cap;
 } Dynamic_Array_Header;
 
 #define Make_Dynamic_Array_type(type) \
 struct { \
   type *data; \
-  u32 len; \
-  u32 cap; \
+  i32 len; \
+  i32 cap; \
 }
 
 typedef Make_Dynamic_Array_type(void) _Any_Dynamic_Array;
@@ -203,17 +208,23 @@ void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
   _Any_Dynamic_Array replica = {};
   memcpy(&replica, arr, sizeof(replica));
 
-  replica.cap = replica.cap ? replica.cap : 1;
-  void *data = arena_alloc(a, 2 * item_size * replica.cap);
-  DG_ASSERT(data != 0);
+  if (!replica.data) {
+    // TODO: default capacity
+    replica.cap = 1;
+    replica.data = arena_alloc(a, 2 * item_size * replica.cap);
+  } else if ((replica.data + replica.cap * item_size) == (a->data + a->cursor)) {
+    // NOTE: se a última alocação da arena foi esse array,
+    // então da para extender allocando um `cap` a mais
+    arena_alloc(a, item_size * replica.cap);
+  } else {
+    void *data = arena_alloc(a, 2 * item_size * replica.cap);
+    memcpy(data, replica.data, item_size*replica.len);
+    replica.data = data;
+  }
 
   replica.cap *= 2;
-  if (replica.len) {
-    memcpy(data, replica.data, item_size*replica.len);
-  }
-  replica.data = data;
-
   memcpy(arr, &replica, sizeof(replica));
+
 }
 
 #define dynamic_array_push(arr, item, arena) DG_STATEMENT \
@@ -233,7 +244,7 @@ void _dynamic_array_clear(_Any_Dynamic_Array *arr) {
 #define Make_Slice_Type(type) \
 struct { \
   type *data; \
-  u32 len; \
+  i32 len; \
 }
 
 typedef Make_Slice_Type(void) _Any_Slice;
@@ -265,7 +276,7 @@ void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
 
 typedef struct {
   f32 *data;
-  u32 rows, cols;
+  i32 rows, cols;
 } DG_Matrix;
 
 #define MAT_AT(mat, row, col) (mat).data[row*(mat).cols + col]
