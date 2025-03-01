@@ -2,13 +2,15 @@
 
 set -euo pipefail
 
-# TODO: colocar um alerta se rpi e windows são 1?
-ON_RPI=0
-ON_WINDOWS=0
-
-if [[ $ON_RPI == 1 ]]; then
-  ON_WINDOWS=0
+if [ -e ./.env ]; then
+  source ./.env
+else
+  echo ".env not found"
 fi
+
+# TODO: colocar um alerta se rpi e windows são 1?
+: ${ON_RPI=0}
+: ${ON_WINDOWS=0}
 
 flags=""
 flags+=" -std=c11"
@@ -30,3 +32,4 @@ fi
 
 
 clang -o mcts.exe platform_terminal.c $flags
+
