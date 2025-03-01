@@ -15,7 +15,8 @@ void terminal_render(Game_State *s) {
 int main() {
 
   srand(time(0));
-  Arena arena = arena_init_malloc(20 * MEGABYTE);
+  size_t size = 20 * MEGABYTE;
+  Arena arena = arena_init_buffer(malloc(size), size);
 
   use_model(&arena);
   return 0;
@@ -29,7 +30,7 @@ int main() {
   char winner;
   while (!game_state.game_over) {
     terminal_render(&game_state);
-    Action action = {};
+    Action action = {0};
     // printf("current player: %c\n", game_state.player);
     if (game_state.player == 'O') {
       // action = minimax(&game_state);

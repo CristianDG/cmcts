@@ -24,7 +24,7 @@ int main() {
 
   srand(time(0));
 
-  Game_State game_state = {};
+  Game_State game_state = {0};
 
   InitWindow(640, 360, "sla");
   {

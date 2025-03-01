@@ -2,6 +2,7 @@
 #ifndef CDG_TYPES_H
 #define CDG_TYPES_H
 
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -12,15 +13,13 @@
  */
 
 
-#ifndef DG_ASSERT
-// TODO: trocar pelo meu assert
-#include <assert.h>
-#define DG_ASSERT assert
-#define DG_ASSERT_MSG(check, msg) assert((check) && msg)
-#endif // DG_ASSERT
-
 #define DG_STATEMENT(x) do { x } while (0)
 
+#ifndef DG_CRASH
+#define DG_CRASH() (*((volatile int *)0) = 69)
+#endif // DG_CRASH
+
+#define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
 #define CLAMP_TOP MIN
@@ -29,6 +28,30 @@
 // TODO: olhar se funciona
 #define STR(x) #x
 #define GLUE(a,b) a##b
+
+#if !defined(DG_ASSERT) // {{{
+
+#if defined(DG_USE_ASSERT_AS_EXPR) // {{{
+// NOTE: esse assert funciona como expressão: bool assert(bool)
+
+#define DG_ASSERT(exp) ( \
+  (exp) \
+    ? (true) \
+    : (DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)), DG_CRASH(), false) \
+)
+// }}}
+#else // !defined(DG_USE_ASSERT_AS_EXPR) {{{
+
+#define DG_ASSERT(exp) \
+DG_STATEMENT({ \
+  if ((exp) == false) { \
+    DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)); \
+    DG_CRASH(); \
+  } \
+})
+
+#endif // DG_USE_ASSERT_AS_EXPR }}}
+#endif // DG_ASSERT }}}
 
 #define is_power_of_two(x) ((x != 0) && ((x & (x - 1)) == 0))
 
@@ -64,6 +87,27 @@ typedef u32 b32;
 #define DG_DYNAMIC_ACCESS(type, offset) \
   (((void *)(type))+offset)
 
+
+#ifndef DG_MEMSET
+#include <string.h>
+#define DG_MEMSET memset
+#endif // DG_MEMSET
+
+#ifndef DG_MEMCPY
+#include <string.h>
+#define DG_MEMCPY memcpy
+#endif // DG_MEMCPY
+
+#ifndef DG_LOG_ERROR
+#include <stdio.h>
+#define DG_LOG_ERROR(args...) fprintf(stderr, args)
+#endif // DG_LOG_ERROR
+
+#ifndef DG_LOG
+#include <stdio.h>
+#define DG_LOG(args...) fprintf(stdout, args)
+#endif // DG_LOG
+
 #endif
 // }}}
 
@@ -71,9 +115,8 @@ typedef u32 b32;
 #ifndef CDG_ALLOC_C
 #define CDG_ALLOC_C
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h> // for memset
+#include <stddef.h>
+// #include <string.h> // for memset
 
 #define DEFAULT_ALIGNMENT 16
 
@@ -99,9 +142,31 @@ typedef struct {
   u32 cursor;
 } Temorary_Arena_Memory;
 
-Arena arena_init_malloc(u64 size) {
-  void *data = malloc(size);
 
+Arena arena_init_buffer(u8 *data, size_t size);
+uintptr_t align_forward(uintptr_t ptr, size_t alignment);
+
+void *_arena_alloc(Arena *arena, size_t size, size_t alignment);
+void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line);
+
+Temorary_Arena_Memory temp_arena_memory_begin(Arena *a);
+void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem);
+
+void arena_clear(Arena *arena);
+
+#if defined(DG_ARENA_DEBUG)
+#define arena_alloc(arena, size) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, __FILE__, __LINE__)
+#define arena_alloc_pass_loc(arena, size, file, line) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, file, line)
+#else
+#define arena_alloc(arena, size) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
+#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
+#endif //DG_ARENA_DEBUG
+
+
+#ifdef DG_ALLOC_IMPLEMENTATION // {{{
+
+Arena arena_init_buffer(u8 *data, size_t size)
+{
   return (Arena){
     .data = data,
     .size = size,
@@ -109,7 +174,8 @@ Arena arena_init_malloc(u64 size) {
 }
 
 // implementation from https://dylanfalconer.com/articles/the-arena-custom-memory-allocators
-uintptr_t align_forward(uintptr_t ptr, size_t alignment) {
+uintptr_t align_forward(uintptr_t ptr, size_t alignment)
+{
     uintptr_t p, a, modulo;
     if (!is_power_of_two(alignment)) {
         return 0;
@@ -126,7 +192,8 @@ uintptr_t align_forward(uintptr_t ptr, size_t alignment) {
     return p;
 }
 
-void *_arena_alloc(Arena *arena, size_t size, size_t alignment) {
+void *_arena_alloc(Arena *arena, size_t size, size_t alignment)
+{
   uintptr_t curr_ptr = (uintptr_t)arena->data + (uintptr_t)arena->cursor;
   uintptr_t offset = align_forward(curr_ptr, alignment);
   offset -= (uintptr_t)arena->data;
@@ -138,47 +205,40 @@ void *_arena_alloc(Arena *arena, size_t size, size_t alignment) {
 
   void *ptr = (void *)arena->data + offset;
   arena->cursor = offset + size;
-  return memset(ptr, 0, size);
+  return DG_MEMSET(ptr, 0, size);
 }
 
 // TODO: olhar https://youtu.be/443UNeGrFoM?si=DBJXmKB_z8W8Yrrf&t=3074
-void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line) {
+void *_tracking_arena_alloc(Arena *arena, size_t size, size_t alignment, char *file, i32 line)
+{
   // TODO: registrar onde foram todas as alocações
   void *ptr = _arena_alloc(arena, size, alignment);
   if (ptr == 0) {
-    fprintf(stderr, "%s:%d Could not allocate %zu bytes\n", file, line, size);
+    DG_LOG_ERROR("%s:%d Could not allocate %zu bytes\n", file, line, size);
   }
   return ptr;
 }
 
-Temorary_Arena_Memory temp_arena_memory_begin(Arena *a){
+Temorary_Arena_Memory temp_arena_memory_begin(Arena *a)
+{
   return (Temorary_Arena_Memory) {
     .arena = a,
     .cursor = a->cursor,
   };
 }
-void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem){
+
+void temp_arena_memory_end(Temorary_Arena_Memory tmp_mem)
+{
   tmp_mem.arena->cursor = tmp_mem.cursor;
 }
 
-
-#if defined(DG_ARENA_DEBUG)
-#define arena_alloc(arena, size) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, __FILE__, __LINE__)
-#define arena_alloc_pass_loc(arena, size, file, line) _tracking_arena_alloc(arena, size, DEFAULT_ALIGNMENT, file, line)
-#else
-#define arena_alloc(arena, size) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
-#define arena_alloc_pass_loc(arena, size, file, line) _arena_alloc(arena, size, DEFAULT_ALIGNMENT)
-#endif //DG_ARENA_DEBUG
-
 // TODO:
-void arena_clear(Arena *arena) {
+void arena_clear(Arena *arena)
+{
   arena->cursor = 0;
 }
 
-void arena_release(Arena arena) {
-  free(arena.data);
-}
-
+#endif // DG_ALLOC_IMPLEMENTATION }}}
 #endif
 // }}}
 
@@ -205,8 +265,8 @@ struct { \
 typedef Make_Dynamic_Array_type(void) _Any_Dynamic_Array;
 
 void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
-  _Any_Dynamic_Array replica = {};
-  memcpy(&replica, arr, sizeof(replica));
+  _Any_Dynamic_Array replica = {0};
+  DG_MEMCPY(&replica, arr, sizeof(replica));
 
   if (!replica.data) {
     // TODO: default capacity
@@ -224,7 +284,6 @@ void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
 
   replica.cap *= 2;
   memcpy(arr, &replica, sizeof(replica));
-
 }
 
 #define dynamic_array_push(arr, item, arena) DG_STATEMENT \
@@ -252,7 +311,7 @@ typedef Make_Slice_Type(void) _Any_Slice;
 #define make_slice(arena, slice, len) dg_make_slice(arena, (_Any_Slice *)slice, len, sizeof(*(slice)->data))
 
 void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
-  _Any_Slice res = {};
+  _Any_Slice res = {0};
 
   void *data = arena_alloc(a, len * item_size);
 
@@ -295,7 +354,7 @@ void matrix_copy(DG_Matrix dst, DG_Matrix src){
   DG_ASSERT(src.rows == dst.rows);
   DG_ASSERT(src.cols == dst.cols);
 
-  memcpy(dst.data, src.data, sizeof(*src.data) * src.rows * src.cols);
+  DG_MEMCPY(dst.data, src.data, sizeof(*src.data) * src.rows * src.cols);
 }
 
 // NOTE: não sei como me sinto passando um valor por cópia mesmo sabendo que ele vai ser modificado
@@ -341,15 +400,15 @@ DG_Matrix matrix_dot(Arena *arena, DG_Matrix a, DG_Matrix b) {
 }
 
 void dg_matrix_print(DG_Matrix m, char *name) {
-  printf("%s = [ \n", name);
+  DG_LOG("%s = [ \n", name);
   for(u32 r = 0; r < m.rows; ++r) {
-    printf("    ");
+    DG_LOG("    ");
     for(u32 c = 0; c < m.cols; ++c) {
-      printf(" %f", MAT_AT(m, r, c));
+      DG_LOG(" %f", MAT_AT(m, r, c));
     }
-    printf("\n");
+    DG_LOG("\n");
   }
-  printf("]\n");
+  DG_LOG("]\n");
 }
 #define matrix_print(x) dg_matrix_print(x, STR(x))
 
@@ -362,6 +421,8 @@ void dg_matrix_print(DG_Matrix m, char *name) {
 #define CDG_MATH_H
 
 #include <math.h>
+#include <stdlib.h>
+
 f32 sigmoidf(f32 x) {
   return 1.f / (1.f + expf(-x));
 }
