@@ -761,7 +761,7 @@ void use_model(Arena *a){
 
 // }}}
 
-// TODO: remover
+// TODO: mudar para algo como #if ON_WINDOWS e definir isso em build.sh
 #if defined(_MSC_VER)
 #define _scanf scanf_s
 #else
