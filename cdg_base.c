@@ -29,29 +29,6 @@
 #define STR(x) #x
 #define GLUE(a,b) a##b
 
-#if !defined(DG_ASSERT) // {{{
-
-#if defined(DG_USE_ASSERT_AS_EXPR) // {{{
-// NOTE: esse assert funciona como expressão: bool assert(bool)
-
-#define DG_ASSERT(exp) ( \
-  (exp) \
-    ? (true) \
-    : (DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)), DG_CRASH(), false) \
-)
-// }}}
-#else // !defined(DG_USE_ASSERT_AS_EXPR) {{{
-
-#define DG_ASSERT(exp) \
-DG_STATEMENT({ \
-  if ((exp) == false) { \
-    DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)); \
-    DG_CRASH(); \
-  } \
-})
-
-#endif // DG_USE_ASSERT_AS_EXPR }}}
-#endif // DG_ASSERT }}}
 
 #define is_power_of_two(x) ((x != 0) && ((x & (x - 1)) == 0))
 
@@ -107,6 +84,25 @@ typedef u32 b32;
 #include <stdio.h>
 #define DG_LOG(args...) fprintf(stdout, args)
 #endif // DG_LOG
+
+#if !defined(DG_ASSERT_EXPR) // {{{
+// NOTE: esse assert funciona como expressão: bool assert(bool)
+#define DG_ASSERT_EXPR(exp) ( \
+  (exp) \
+    ? (true) \
+    : (DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)), DG_CRASH(), false) \
+)
+#endif // DG_ASSERT_EXPR }}}
+
+#if !defined(DG_ASSERT) // {{{
+#define DG_ASSERT(exp) \
+DG_STATEMENT({ \
+  if ((exp) == false) { \
+    DG_LOG_ERROR("%s,%d: assertion '%s' failed\n", __FILE__, __LINE__, STR(exp)); \
+    DG_CRASH(); \
+  } \
+})
+#endif // DG_ASSERT }}}
 
 #endif
 // }}}
