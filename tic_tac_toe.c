@@ -383,7 +383,7 @@ Action monte_carlo_tree_search(Arena scratch, Game_State *s, i32 iterations, f32
 
 // softmax {{{
 
-void apply_sigmoid(DG_Matrix m) {
+void apply_sigmoid(DG_Matrix_View m) {
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
         MAT_AT(m, r, c) = sigmoidf(MAT_AT(m, r, c));
@@ -391,7 +391,7 @@ void apply_sigmoid(DG_Matrix m) {
   }
 }
 
-void matrix_randomize(DG_Matrix m){
+void matrix_randomize(DG_Matrix_View m){
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
         MAT_AT(m, r, c) = randf()*(1.f - 0.f) + 0.f;
@@ -401,15 +401,15 @@ void matrix_randomize(DG_Matrix m){
 
 // xor {{{
 typedef struct {
-  DG_Matrix a0;
+  DG_Matrix_View a0;
 
-  DG_Matrix w1;
-  DG_Matrix b1;
-  DG_Matrix a1;
+  DG_Matrix_View w1;
+  DG_Matrix_View b1;
+  DG_Matrix_View a1;
 
-  DG_Matrix w2;
-  DG_Matrix b2;
-  DG_Matrix a2;
+  DG_Matrix_View w2;
+  DG_Matrix_View b2;
+  DG_Matrix_View a2;
 } Xor;
 
 Xor xor_alloc(Arena *a){
@@ -436,7 +436,7 @@ void forward_xor(Xor model) {
   apply_sigmoid(model.a2);
 }
 
-f32 cost_xor(Xor model, DG_Matrix inputs, DG_Matrix outputs){
+f32 cost_xor(Xor model, DG_Matrix_View inputs, DG_Matrix_View outputs){
   DG_ASSERT(inputs.cols == model.a0.cols);
   DG_ASSERT(inputs.rows == outputs.rows);
   DG_ASSERT(outputs.cols == model.a2.cols);
@@ -458,7 +458,7 @@ f32 cost_xor(Xor model, DG_Matrix inputs, DG_Matrix outputs){
   return cost / (f32)number_of_samples;
 }
 
-void finite_diff_xor(Xor model, Xor gradient, f32 epsilon, DG_Matrix inputs, DG_Matrix outputs) {
+void finite_diff_xor(Xor model, Xor gradient, f32 epsilon, DG_Matrix_View inputs, DG_Matrix_View outputs) {
   f32 saved;
   f32 c = cost_xor(model, inputs, outputs);
   for (u32 i = 0; i < model.w1.rows; ++i){
@@ -523,7 +523,7 @@ void learn_xor(Xor model, Xor gradient, f32 rate) {
 // }}}
 
 // model  {{{
-typedef Make_Slice_Type(DG_Matrix) DG_Matrix_Slice;
+typedef Make_Slice_Type(DG_Matrix_View) DG_Matrix_Slice;
 typedef struct {
   DG_Matrix_Slice a;
   DG_Matrix_Slice w;
@@ -578,11 +578,11 @@ ML_Model alloc_model(Arena *a, u32 nodes_input, u32 nodes_middle, u32 nodes_outp
 void forward_model(ML_Model model) {
   u32 layers = model.w.len;
   for (u32 layer = 0; layer < layers; ++layer) {
-    DG_Matrix input_layer = model.a.data[layer];
-    DG_Matrix output_layer = model.a.data[layer+1];
+    DG_Matrix_View input_layer = model.a.data[layer];
+    DG_Matrix_View output_layer = model.a.data[layer+1];
 
-    DG_Matrix layer_bias  = model.b.data[layer];
-    DG_Matrix layer_weight = model.w.data[layer];
+    DG_Matrix_View layer_bias  = model.b.data[layer];
+    DG_Matrix_View layer_weight = model.w.data[layer];
 
     matrix_dot_in_place(output_layer, input_layer, layer_weight);
     matrix_sum_in_place(output_layer, output_layer, layer_bias);
@@ -590,7 +590,7 @@ void forward_model(ML_Model model) {
   }
 }
 
-f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
+f32 cost_model(ML_Model model, DG_Matrix_View inputs, DG_Matrix_View outputs) {
   DG_ASSERT(inputs.cols == model.a.data[0].cols);
   DG_ASSERT(inputs.rows == outputs.rows);
   DG_ASSERT(outputs.cols == SLICE_AT(model.a, -1).cols);
@@ -605,7 +605,7 @@ f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
 
     forward_model(model);
 
-    DG_Matrix last_layer = SLICE_AT(model.a, -1);
+    DG_Matrix_View last_layer = SLICE_AT(model.a, -1);
     for (u32 j = 0; j < last_layer.cols; ++j) {
       f32 d = MAT_AT(last_layer, 0, j) - MAT_AT(outputs, i, j);
       cost += d * d;
@@ -615,7 +615,7 @@ f32 cost_model(ML_Model model, DG_Matrix inputs, DG_Matrix outputs) {
   return cost / (f32)number_of_samples;
 }
 
-void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix inputs, DG_Matrix outputs) {
+void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix_View inputs, DG_Matrix_View outputs) {
   f32 saved;
   f32 c = cost_model(model, inputs, outputs);
 
@@ -624,8 +624,8 @@ void finite_diff_model(ML_Model model, ML_Model gradient, f32 epsilon, DG_Matrix
     for (u32 stride_idx = 0; stride_idx  < 2; ++stride_idx ) {
       u32 stride = (u32[2]){ DG_OFFSET_OF(ML_Model, w), DG_OFFSET_OF(ML_Model, b) }[stride_idx];
       
-      DG_Matrix model_layer    = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&model   , stride))->data[layer];
-      DG_Matrix gradient_layer = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&gradient, stride))->data[layer];
+      DG_Matrix_View model_layer    = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&model   , stride))->data[layer];
+      DG_Matrix_View gradient_layer = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&gradient, stride))->data[layer];
       for (u32 i = 0; i < model_layer.rows; ++i) {
         for (u32 j = 0; j < model_layer.cols; ++j) {
           saved = MAT_AT(model_layer, i, j);
@@ -645,8 +645,8 @@ void learn_model(ML_Model model, ML_Model gradient, f32 rate) {
     for (u32 stride_idx = 0; stride_idx  < 2; ++stride_idx ) {
       u32 stride = (u32[2]){ DG_OFFSET_OF(ML_Model, w), DG_OFFSET_OF(ML_Model, b) }[stride_idx];
 
-      DG_Matrix model_layer    = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&model   , stride))->data[layer];
-      DG_Matrix gradient_layer = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&gradient, stride))->data[layer];
+      DG_Matrix_View model_layer    = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&model   , stride))->data[layer];
+      DG_Matrix_View gradient_layer = ((DG_Matrix_Slice *)DG_DYNAMIC_ACCESS(&gradient, stride))->data[layer];
 
       for (u32 i = 0; i < model_layer.rows; ++i){
         for (u32 j = 0; j < model_layer.cols; ++j){
@@ -681,7 +681,7 @@ ML_Model copy_model_structure(Arena *a, ML_Model model) {
 
 void use_model(Arena *a){
 
-  DG_Matrix inputs = {
+  DG_Matrix_View inputs = {
     .rows = 4,
     .cols = 2,
     .data = (f32[]){
@@ -692,7 +692,7 @@ void use_model(Arena *a){
     }
   };
 
-  DG_Matrix outputs = {
+  DG_Matrix_View outputs = {
     .rows = 4,
     .cols = 1,
     .data = (f32[]){

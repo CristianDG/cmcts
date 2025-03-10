@@ -331,13 +331,14 @@ void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
 
 typedef struct {
   f32 *data;
-  i32 rows, cols;
-} DG_Matrix;
+  i32 rows;
+  i32 cols;
+} DG_Matrix_View;
 
 #define MAT_AT(mat, row, col) (mat).data[row*(mat).cols + col]
 
-DG_Matrix matrix_alloc(Arena *a, u32 rows, u32 cols){
-  DG_Matrix m = {
+DG_Matrix_View matrix_alloc(Arena *a, u32 rows, u32 cols){
+  DG_Matrix_View m = {
     .rows = rows,
     .cols = cols,
   };
@@ -346,7 +347,7 @@ DG_Matrix matrix_alloc(Arena *a, u32 rows, u32 cols){
   return m;
 }
 
-void matrix_copy(DG_Matrix dst, DG_Matrix src){
+void matrix_copy(DG_Matrix_View dst, DG_Matrix_View src){
   DG_ASSERT(src.rows == dst.rows);
   DG_ASSERT(src.cols == dst.cols);
 
@@ -354,7 +355,7 @@ void matrix_copy(DG_Matrix dst, DG_Matrix src){
 }
 
 // NOTE: não sei como me sinto passando um valor por cópia mesmo sabendo que ele vai ser modificado
-void matrix_fill(DG_Matrix m, f32 val) {
+void matrix_fill(DG_Matrix_View m, f32 val) {
   for(u32 r = 0; r < m.rows; ++r) {
     for(u32 c = 0; c < m.cols; ++c) {
       MAT_AT(m, r, c) = val;
@@ -362,7 +363,7 @@ void matrix_fill(DG_Matrix m, f32 val) {
   }
 }
 
-void matrix_sum_in_place(DG_Matrix dst, DG_Matrix a, DG_Matrix b) {
+void matrix_sum_in_place(DG_Matrix_View dst, DG_Matrix_View a, DG_Matrix_View b) {
   DG_ASSERT(a.rows == b.rows);
   DG_ASSERT(a.cols == b.cols);
 
@@ -373,7 +374,7 @@ void matrix_sum_in_place(DG_Matrix dst, DG_Matrix a, DG_Matrix b) {
   }
 }
 
-void matrix_dot_in_place(DG_Matrix dst, DG_Matrix a, DG_Matrix b) {
+void matrix_dot_in_place(DG_Matrix_View dst, DG_Matrix_View a, DG_Matrix_View b) {
   DG_ASSERT(a.cols == b.rows);
   DG_ASSERT(dst.cols == b.cols);
   DG_ASSERT(dst.rows == a.rows);
@@ -389,13 +390,13 @@ void matrix_dot_in_place(DG_Matrix dst, DG_Matrix a, DG_Matrix b) {
   }
 }
 
-DG_Matrix matrix_dot(Arena *arena, DG_Matrix a, DG_Matrix b) {
-  DG_Matrix res = matrix_alloc(arena, a.rows, b.cols);
+DG_Matrix_View matrix_dot(Arena *arena, DG_Matrix_View a, DG_Matrix_View b) {
+  DG_Matrix_View res = matrix_alloc(arena, a.rows, b.cols);
   matrix_dot_in_place(res, a, b);
   return res;
 }
 
-void dg_matrix_print(DG_Matrix m, char *name) {
+void dg_matrix_print(DG_Matrix_View m, char *name) {
   DG_LOG("%s = [ \n", name);
   for(u32 r = 0; r < m.rows; ++r) {
     DG_LOG("    ");
