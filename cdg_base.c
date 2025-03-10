@@ -107,8 +107,8 @@ DG_STATEMENT({ \
 #endif
 // }}}
 
-// alloc.c {{{
 #ifndef CDG_ALLOC_C
+// alloc.c {{{
 #define CDG_ALLOC_C
 
 #include <stddef.h>
@@ -172,20 +172,20 @@ Arena arena_init_buffer(u8 *data, size_t size)
 // implementation from https://dylanfalconer.com/articles/the-arena-custom-memory-allocators
 uintptr_t align_forward(uintptr_t ptr, size_t alignment)
 {
-    uintptr_t p, a, modulo;
-    if (!is_power_of_two(alignment)) {
-        return 0;
-    }
+  uintptr_t p, a, modulo;
+  if (!is_power_of_two(alignment)) {
+    return 0;
+  }
 
-    p = ptr;
-    a = (uintptr_t)alignment;
-    modulo = p & (a - 1);
+  p = ptr;
+  a = (uintptr_t)alignment;
+  modulo = p & (a - 1);
 
-    if (modulo) {
-        p += a - modulo;
-    }
+  if (modulo) {
+    p += a - modulo;
+  }
 
-    return p;
+  return p;
 }
 
 void *_arena_alloc(Arena *arena, size_t size, size_t alignment)
@@ -235,21 +235,15 @@ void arena_clear(Arena *arena)
 }
 
 #endif // DG_ALLOC_IMPLEMENTATION }}}
-#endif
 // }}}
+#endif
 
-// dynamic array and other containers...? {{{
 #ifndef CDG_CONTAINER_C
+// dynamic array and other containers...? {{{
 #define CDG_CONTAINER_C
 // TODO: include arena.c
 
 // NOTE: implementation from https://nullprogram.com/blog/2023/10/05/
-
-// TODO: usar ou remover
-typedef struct dynamic_array_header {
-  i32 len;
-  i32 cap;
-} Dynamic_Array_Header;
 
 #define Make_Dynamic_Array_type(type) \
 struct { \
@@ -282,13 +276,12 @@ void dynamic_array_grow(_Any_Dynamic_Array *arr, Arena *a, u32 item_size) {
   memcpy(arr, &replica, sizeof(replica));
 }
 
-#define dynamic_array_push(arr, item, arena) DG_STATEMENT \
-  ( \
-    if ((arr)->len >= (arr)->cap) { \
-      dynamic_array_grow((_Any_Dynamic_Array*)(arr), (arena), sizeof(*(arr)->data)); /* NOLINT */\
-    }\
-    (arr)->data[(arr)->len++] = (item); \
-  )
+#define dynamic_array_push(arr, item, arena) DG_STATEMENT({ \
+  if ((arr)->len >= (arr)->cap) { \
+    dynamic_array_grow((_Any_Dynamic_Array*)(arr), (arena), sizeof(*(arr)->data)); /* NOLINT */ \
+  } \
+  (arr)->data[(arr)->len++] = (item); \
+})
 
 void _dynamic_array_clear(_Any_Dynamic_Array *arr) {
   arr->len = 0;
@@ -319,14 +312,13 @@ void dg_make_slice(Arena *a, _Any_Slice *slice, u64 len, u64 item_size){
   *slice = res;
 }
 
-#define SLICE_AT(slice, idx) \
-  (slice.data[idx < 0 ? slice.len + idx : idx])
+#define SLICE_AT(slice, idx) (slice.data[idx < 0 ? slice.len + idx : idx])
 
-#endif // CDG_CONTAINER_C
 // }}}
+#endif // CDG_CONTAINER_C
 
-// Matrix types and operations {{{
 #ifndef CDG_MATRIX_H
+// Matrix types and operations {{{
 #define CDG_MATRIX_H
 
 typedef struct {
@@ -410,8 +402,8 @@ void dg_matrix_print(DG_Matrix_View m, char *name) {
 #define matrix_print(x) dg_matrix_print(x, STR(x))
 
 
-#endif // CDG_MATRIX_H
 // }}}
+#endif // CDG_MATRIX_H
 
 // math {{{
 #ifndef CDG_MATH_H
